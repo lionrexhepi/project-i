@@ -27,15 +27,8 @@ pub enum Item {
 }
 
 pub enum Expression {
-    Literal(i64),
-}
-
-macro_rules! expect {
-    ($stream:ident, $pat:pat) => {
-        let $pat = $stream.next() else {
-            panic!("unexpected token");
-        };
-    };
+    LitInt(i64),
+    LitBool(bool),
 }
 
 pub fn parse(stream: &mut TokenStream) -> Ast {
@@ -44,11 +37,16 @@ pub fn parse(stream: &mut TokenStream) -> Ast {
         match stream.next() {
             Token::Eof => break,
             Token::Print => {
-                expect!(stream, Token::Literal(lit));
-                println!("{}", stream.inner.len());
-                items.push(Item::Print(Expression::Literal(lit)));
+                let expression = match stream.next() {
+                    Token::Integer(i) => Expression::LitInt(i),
+                    Token::Boolean(b) => Expression::LitBool(b),
+                    _ => panic!("unexpected token"),
+                };
+                items.push(Item::Print(expression));
             }
-            other => todo!("Strange token: {other:?}"),
+            Token::Identifier(_) => todo!(),
+            Token::Integer(_) => todo!(),
+            Token::Boolean(_) => todo!(),
         }
     }
     Ast { items }
@@ -59,13 +57,24 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_parse() {
-        let mut stream = TokenStream::from([Token::Print, Token::Literal(42)]);
+    fn test_print_int() {
+        let mut stream = TokenStream::from([Token::Print, Token::Integer(42)]);
         let items = parse(&mut stream);
         assert_eq!(items.items.len(), 1);
         assert!(matches!(
             items.items[0],
-            Item::Print(Expression::Literal(42))
+            Item::Print(Expression::LitInt(42))
+        ))
+    }
+
+    #[test]
+    fn test_print_bool() {
+        let mut stream = TokenStream::from([Token::Print, Token::Boolean(true)]);
+        let items = parse(&mut stream);
+        assert_eq!(items.items.len(), 1);
+        assert!(matches!(
+            items.items[0],
+            Item::Print(Expression::LitBool(true))
         ))
     }
 }

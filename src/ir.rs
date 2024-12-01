@@ -21,7 +21,8 @@ pub enum MangledItem {
 }
 
 pub enum MangledExpression {
-    Literal(i64),
+    LitInt(i64),
+    LitBool(bool),
 }
 
 pub fn mangle(ast: Ast) -> MangledProgram {
@@ -38,7 +39,8 @@ fn mangle_item(item: Item) -> Vec<MangledItem> {
 
 fn mangle_expression(expr: Expression) -> MangledExpression {
     match expr {
-        Expression::Literal(lit) => MangledExpression::Literal(lit),
+        Expression::LitInt(int) => MangledExpression::LitInt(int),
+        Expression::LitBool(bool) => MangledExpression::LitBool(bool),
     }
 }
 
@@ -48,12 +50,12 @@ mod test {
 
     #[test]
     fn test_mangle() {
-        let ast = Ast::from([Item::Print(Expression::Literal(42))]);
+        let ast = Ast::from([Item::Print(Expression::LitInt(42))]);
         let program = mangle(ast);
         assert_eq!(program.items.len(), 1);
         assert!(matches!(
             program.items[0],
-            MangledItem::Print(MangledExpression::Literal(42))
+            MangledItem::Print(MangledExpression::LitInt(42))
         ))
     }
 }

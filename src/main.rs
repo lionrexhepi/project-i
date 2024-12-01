@@ -5,7 +5,7 @@ use project_i::{
 };
 
 fn main() {
-    let source = "print 42".chars().collect();
+    let source = "print true".chars().collect();
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
     let ir = mangle(ast);

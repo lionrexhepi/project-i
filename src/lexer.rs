@@ -4,7 +4,8 @@ use std::collections::VecDeque;
 pub enum Token {
     Print,
     Identifier(String),
-    Literal(i64),
+    Integer(i64),
+    Boolean(bool),
     Eof,
 }
 
@@ -48,7 +49,7 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                             index += 1;
                         }
                         _ => {
-                            stream.push(Token::Literal(lit));
+                            stream.push(Token::Integer(lit));
                             break;
                         }
                     }
@@ -56,18 +57,22 @@ pub fn lex(source: Vec<char>) -> TokenStream {
             }
             Some(other) if other.is_ascii_alphabetic() => {
                 let mut ident = c.unwrap().to_string();
-                for c in source.iter().skip(index + 1) {
+                index += 1;
+                loop {
+                    let c = source.get(index).copied();
                     match c {
-                        'a'..='z' | 'A'..='Z' | '0'..='9' => {
-                            ident.push(*c);
+                        Some(letter) if letter.is_ascii_alphabetic() => {
+                            ident.push(letter);
                             index += 1;
                         }
                         _ => {
-                            if ident == "print" {
-                                stream.push(Token::Print);
-                            } else {
-                                stream.push(Token::Identifier(ident));
-                            }
+                            stream.push(match ident.as_str() {
+                                "print" => Token::Print,
+                                "true" => Token::Boolean(true),
+                                "false" => Token::Boolean(false),
+                                _ => Token::Identifier(ident),
+                            });
+
                             break;
                         }
                     }
@@ -101,9 +106,16 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_lex() {
+    fn test_number() {
         let source = "print 42";
         let stream = lex(source.chars().collect());
-        assert_eq!(stream.inner, vec![Token::Print, Token::Literal(42)]);
+        assert_eq!(stream.inner, vec![Token::Print, Token::Integer(42)]);
+    }
+
+    #[test]
+    fn test_bool() {
+        let source = "print true";
+        let stream = lex(source.chars().collect());
+        assert_eq!(stream.inner, vec![Token::Print, Token::Boolean(true)]);
     }
 }
