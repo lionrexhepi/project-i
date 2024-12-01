@@ -1,9 +1,11 @@
 use std::collections::VecDeque;
 
+use smol_str::{SmolStr, SmolStrBuilder};
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     Print,
-    Identifier(String),
+    Identifier(SmolStr),
     Integer(i64),
     Boolean(bool),
     Eof,
@@ -35,7 +37,7 @@ pub fn lex(source: Vec<char>) -> TokenStream {
     let mut index = 0;
     loop {
         let c = source.get(index).copied();
-        dbg!(c);
+
         match c {
             Some(' ') => {}
             Some(other) if other.is_ascii_digit() => {
@@ -56,7 +58,8 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                 }
             }
             Some(other) if other.is_ascii_alphabetic() => {
-                let mut ident = c.unwrap().to_string();
+                let mut ident = SmolStrBuilder::new();
+                ident.push(other);
                 index += 1;
                 loop {
                     let c = source.get(index).copied();
@@ -66,6 +69,7 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                             index += 1;
                         }
                         _ => {
+                            let ident = ident.finish();
                             stream.push(match ident.as_str() {
                                 "print" => Token::Print,
                                 "true" => Token::Boolean(true),
@@ -117,5 +121,15 @@ mod test {
         let source = "print true";
         let stream = lex(source.chars().collect());
         assert_eq!(stream.inner, vec![Token::Print, Token::Boolean(true)]);
+    }
+
+    #[test]
+    fn test_identifier() {
+        let source = "print foo";
+        let stream = lex(source.chars().collect());
+        assert_eq!(
+            stream.inner,
+            vec![Token::Print, Token::Identifier("foo".into())]
+        );
     }
 }

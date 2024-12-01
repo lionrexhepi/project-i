@@ -3,7 +3,12 @@
 ## Roadmap
 
 - [x] Working framework (Empty token, AST, IR, Codegen)
-- [ ] Int & Bool literals
+- [x] Int & Bool literals
 - [ ] Identifiers
 - [ ] Binary Expressions
-- [ ]
+- [ ] Unary Expressions
+- [ ] If Statements
+- [ ] Else
+- [ ] While Loop
+- [ ] Declaring variables
+- [ ] Function Declarations

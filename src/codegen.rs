@@ -9,6 +9,7 @@ pub fn write_c(program: MangledProgram, to: &mut impl Write) {
                 let str = match expr {
                     MangledExpression::LitInt(i) => i.to_string(),
                     MangledExpression::LitBool(b) => b.to_string(),
+                    MangledExpression::Variable(smol_str) => smol_str.to_string(),
                 };
                 write!(to, "printf(\"%ld\\n\", {});", str).unwrap();
             }

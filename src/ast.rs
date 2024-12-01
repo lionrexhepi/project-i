@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 use crate::lexer::{Token, TokenStream};
 
 pub struct Ast {
@@ -22,13 +24,16 @@ where
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Item {
     Print(Expression),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Expression {
     LitInt(i64),
     LitBool(bool),
+    Identifier(SmolStr),
 }
 
 pub fn parse(stream: &mut TokenStream) -> Ast {
@@ -40,6 +45,7 @@ pub fn parse(stream: &mut TokenStream) -> Ast {
                 let expression = match stream.next() {
                     Token::Integer(i) => Expression::LitInt(i),
                     Token::Boolean(b) => Expression::LitBool(b),
+                    Token::Identifier(ident) => Expression::Identifier(ident),
                     _ => panic!("unexpected token"),
                 };
                 items.push(Item::Print(expression));
@@ -76,5 +82,16 @@ mod test {
             items.items[0],
             Item::Print(Expression::LitBool(true))
         ))
+    }
+
+    #[test]
+    fn test_print_identifier() {
+        let mut stream = TokenStream::from([Token::Print, Token::Identifier("foo".into())]);
+        let items = parse(&mut stream);
+        assert_eq!(items.items.len(), 1);
+        assert_eq!(
+            items.items[0],
+            Item::Print(Expression::Identifier("foo".into()))
+        );
     }
 }

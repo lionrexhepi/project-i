@@ -1,11 +1,7 @@
-use project_i::{
-    ast::{parse, Ast},
-    ir::mangle,
-    lexer::lex,
-};
+use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
-    let source = "print true".chars().collect();
+    let source = "print foo".chars().collect();
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
     let ir = mangle(ast);

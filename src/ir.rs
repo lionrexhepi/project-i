@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 use crate::ast::{Ast, Expression, Item};
 
 pub struct MangledProgram {
@@ -23,6 +25,7 @@ pub enum MangledItem {
 pub enum MangledExpression {
     LitInt(i64),
     LitBool(bool),
+    Variable(SmolStr),
 }
 
 pub fn mangle(ast: Ast) -> MangledProgram {
@@ -41,6 +44,7 @@ fn mangle_expression(expr: Expression) -> MangledExpression {
     match expr {
         Expression::LitInt(int) => MangledExpression::LitInt(int),
         Expression::LitBool(bool) => MangledExpression::LitBool(bool),
+        Expression::Identifier(name) => MangledExpression::Variable(name),
     }
 }
 
