@@ -1,0 +1,21 @@
+let fact = fn(n: u32): u32 does
+    if n <= 1 then
+        1
+    else
+        n * fact(n - 1)
+    end
+end;
+
+let add = fn(a: i32, b: i32): i32 does a + b end;
+
+let addOne = add(1);
+
+let main = fn(): i32 does
+    let number1 = std::io::readline() -> i32::parse;
+    let number2 = i32::parse(std::io::readline());
+
+    std::io::print("number1 + 1: ");
+    addOne(number1) -> std::io::println;
+    std::io::print("number2 + 1: ");
+    std::io::println(addOne(number2);
+end;
