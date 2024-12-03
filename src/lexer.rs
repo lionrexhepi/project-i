@@ -11,8 +11,12 @@ pub enum Token {
     Let,
     Eq,
     Colon,
+    LParen,
+    RParen,
+    Comma,
     Semicolon,
     Fn,
+    With,
     End,
     Eof,
 }
@@ -46,72 +50,69 @@ pub fn lex(source: Vec<char>) -> TokenStream {
     let mut stream = TokenStream::new();
     let mut index = 0;
     loop {
-        let c = source.get(index).copied();
+        let Some(c) = source.get(index).copied() else {
+            break;
+        };
 
-        match c {
-            Some(' ') => {}
-            Some(':') => {
-                stream.push(Token::Colon);
-            }
-            Some(';') => {
-                stream.push(Token::Semicolon);
-            }
-            Some('=') => {
-                stream.push(Token::Eq);
-            }
-            Some(other) if other.is_ascii_digit() => {
-                let mut lit = c.unwrap().to_digit(10).unwrap() as i64;
-                index += 1;
-                loop {
-                    let c = source.get(index).copied();
-                    match c {
-                        Some(digit) if digit.is_ascii_digit() => {
-                            lit = lit * 10 + digit.to_digit(10).unwrap() as i64;
-                            index += 1;
-                        }
-                        _ => {
-                            stream.push(Token::Integer(lit));
-                            break;
-                        }
+        if c.is_ascii_whitespace() {
+            index += 1;
+        } else if c.is_ascii_alphabetic() {
+            let mut ident = SmolStrBuilder::new();
+            ident.push(c);
+            index += 1;
+            loop {
+                let c = source.get(index).copied();
+                match c {
+                    Some(letter) if letter.is_ascii_alphabetic() => {
+                        ident.push(letter);
+                        index += 1;
+                    }
+                    _ => {
+                        let ident = ident.finish();
+                        stream.push(match ident.as_str() {
+                            "print" => Token::Print,
+                            "true" => Token::Boolean(true),
+                            "false" => Token::Boolean(false),
+                            "let" => Token::Let,
+                            "fn" => Token::Fn,
+                            "end" => Token::End,
+                            "with" => Token::With,
+                            _ => Token::Identifier(ident),
+                        });
+
+                        break;
                     }
                 }
-                continue;
             }
-            Some(other) if other.is_ascii_alphabetic() => {
-                let mut ident = SmolStrBuilder::new();
-                ident.push(other);
-                index += 1;
-                loop {
-                    let c = source.get(index).copied();
-                    match c {
-                        Some(letter) if letter.is_ascii_alphabetic() => {
-                            ident.push(letter);
-                            index += 1;
-                        }
-                        _ => {
-                            let ident = ident.finish();
-                            stream.push(match ident.as_str() {
-                                "print" => Token::Print,
-                                "true" => Token::Boolean(true),
-                                "false" => Token::Boolean(false),
-                                "let" => Token::Let,
-                                "fn" => Token::Fn,
-                                "end" => Token::End,
-                                _ => Token::Identifier(ident),
-                            });
-
-                            break;
-                        }
+            continue;
+        } else if c.is_ascii_digit() {
+            let mut lit = c.to_digit(10).unwrap() as i64;
+            index += 1;
+            loop {
+                let c = source.get(index).copied();
+                match c {
+                    Some(digit) if digit.is_ascii_digit() => {
+                        lit = lit * 10 + digit.to_digit(10).unwrap() as i64;
+                        index += 1;
+                    }
+                    _ => {
+                        stream.push(Token::Integer(lit));
+                        break;
                     }
                 }
-                continue;
             }
-            None => {
-                break;
-            }
-            Some(other) => todo!("Cannot handle char {other}"),
+        } else {
+            index += 1;
+            stream.push(match c {
+                ',' => Token::Comma,
+                ';' => Token::Semicolon,
+                '(' => Token::LParen,
+                ')' => Token::RParen,
+                '=' => Token::Eq,
+                ':' => Token::Colon,
+                other => panic!("unexpected character: {}", other),
+            });
         }
-        index += 1;
     }
 
     stream
