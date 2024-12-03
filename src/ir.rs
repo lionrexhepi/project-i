@@ -25,7 +25,7 @@ where
 pub enum MangledItem {
     Print(MangledExpression),
     Declaration {
-        ty: SmolStr,
+        typename: SmolStr,
         var: SmolStr,
         value: MangledExpression,
     },
@@ -51,10 +51,18 @@ pub fn mangle(ast: Ast) -> MangledProgram {
 fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
     match item {
         Item::Print(expr) => vec![MangledItem::Print(mangle_expression(expr, symbols))],
-        Item::Declaration { name, value } => {
-            symbols.insert(&name, Symbol);
+        Item::Declaration {
+            name,
+            typename,
+            value,
+        } => {
+            let ty = match symbols.get(&typename) {
+                Some(Symbol::Type(ty)) => *ty,
+                _ => panic!("undeclared type: {}", typename),
+            };
+            symbols.insert(&name, Symbol::Variable(ty));
             vec![MangledItem::Declaration {
-                ty: "int".into(),
+                typename,
                 var: name,
                 value: mangle_expression(value, symbols),
             }]
@@ -95,6 +103,7 @@ mod test {
         let mut symbols = SymbolTable::default();
         let declaration = Item::Declaration {
             name: "foo".into(),
+            typename: "int".into(),
             value: Expression::LitInt(42),
         };
 
@@ -104,12 +113,15 @@ mod test {
         assert_eq!(
             items[0],
             MangledItem::Declaration {
-                ty: "int".into(),
+                typename: "int".into(),
                 var: "foo".into(),
                 value: MangledExpression::LitInt(42)
             }
         );
-        assert_eq!(symbols.get("foo"), Some(&Symbol))
+        assert_eq!(
+            symbols.get("foo"),
+            Some(&Symbol::Variable(symbols::Type::Int))
+        )
     }
 
     #[test]

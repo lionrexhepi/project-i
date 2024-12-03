@@ -6,11 +6,15 @@ pub fn write_c(program: MangledProgram, to: &mut impl Write) {
     for item in program.items {
         match item {
             MangledItem::Print(expr) => {
-                to.write_all(b"printf(\"%ld\\n\", {").unwrap();
+                to.write_all(b"printf(\"%ld\\n\", ").unwrap();
                 write_expression(expr, to);
-                to.write_all(b"});").unwrap();
+                to.write_all(b");").unwrap();
             }
-            MangledItem::Declaration { ty, var, value } => {
+            MangledItem::Declaration {
+                typename: ty,
+                var,
+                value,
+            } => {
                 write!(to, "{} {} = ", ty, var).unwrap();
                 write_expression(value, to);
                 to.write_all(b";").unwrap();
@@ -29,6 +33,8 @@ fn write_expression(expr: MangledExpression, to: &mut impl Write) {
 
 #[cfg(test)]
 mod test {
+    use core::str;
+
     use super::*;
 
     #[test]
@@ -44,13 +50,13 @@ mod test {
         let program = MangledProgram::from([MangledItem::Print(MangledExpression::LitBool(true))]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);
-        assert_eq!(buf, b"printf(\"%ld\\n\", true);");
+        assert_eq!(str::from_utf8(&buf).unwrap(), "printf(\"%ld\\n\", true);");
     }
 
     #[test]
     fn test_declare_int() {
         let program = MangledProgram::from([MangledItem::Declaration {
-            ty: "int".into(),
+            typename: "int".into(),
             var: "foo".into(),
             value: MangledExpression::LitInt(42),
         }]);

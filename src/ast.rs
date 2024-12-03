@@ -28,7 +28,11 @@ where
 #[derive(Debug, PartialEq)]
 pub enum Item {
     Print(Expression),
-    Declaration { name: SmolStr, value: Expression },
+    Declaration {
+        name: SmolStr,
+        typename: SmolStr,
+        value: Expression,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,6 +62,14 @@ pub fn parse(stream: &mut TokenStream) -> Ast {
                     _ => panic!("unexpected token"),
                 };
 
+                let typename = match stream.advance() {
+                    Token::Colon => match stream.advance() {
+                        Token::Identifier(ident) => ident,
+                        _ => panic!("unexpected token"),
+                    },
+                    _ => panic!("unexpected token"),
+                };
+
                 let value = match stream.advance() {
                     Token::Eq => match stream.advance() {
                         Token::Integer(i) => Expression::LitInt(i),
@@ -67,12 +79,17 @@ pub fn parse(stream: &mut TokenStream) -> Ast {
                     },
                     _ => panic!("unexpected token"),
                 };
-                items.push(Item::Declaration { name, value });
+                items.push(Item::Declaration {
+                    name,
+                    typename,
+                    value,
+                });
             }
             Token::Identifier(_) => todo!(),
             Token::Integer(_) => todo!(),
             Token::Boolean(_) => todo!(),
             Token::Eq => todo!(),
+            Token::Colon => todo!(),
         }
     }
     Ast { items }
@@ -120,6 +137,8 @@ mod test {
         let mut stream = TokenStream::from([
             Token::Let,
             Token::Identifier("foo".into()),
+            Token::Colon,
+            Token::Identifier("int".into()),
             Token::Eq,
             Token::Integer(42),
         ]);
@@ -129,6 +148,7 @@ mod test {
             items.items[0],
             Item::Declaration {
                 name: "foo".into(),
+                typename: "int".into(),
                 value: Expression::LitInt(42)
             }
         );

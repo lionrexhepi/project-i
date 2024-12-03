@@ -1,7 +1,7 @@
 use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
-    let source = "let foo = 42; print foo".chars().collect();
+    let source = "let foo:int = 42 print foo".chars().collect();
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
     let ir = mangle(ast);

@@ -10,6 +10,7 @@ pub enum Token {
     Print,
     Let,
     Eq,
+    Colon,
     Eof,
 }
 
@@ -42,6 +43,9 @@ pub fn lex(source: Vec<char>) -> TokenStream {
 
         match c {
             Some(' ') => {}
+            Some(':') => {
+                stream.push(Token::Colon);
+            }
             Some('=') => {
                 stream.push(Token::Eq);
             }
@@ -61,6 +65,7 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                         }
                     }
                 }
+                continue;
             }
             Some(other) if other.is_ascii_alphabetic() => {
                 let mut ident = SmolStrBuilder::new();
@@ -87,11 +92,12 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                         }
                     }
                 }
+                continue;
             }
             None => {
                 break;
             }
-            _ => todo!(),
+            Some(other) => todo!("Cannot handle char {other}"),
         }
         index += 1;
     }
