@@ -30,7 +30,7 @@ pub enum Item {
     Print(Expression),
     Declaration {
         name: SmolStr,
-        typename: SmolStr,
+        typename: Option<SmolStr>,
         value: Expression,
     },
 }
@@ -71,11 +71,15 @@ fn parse_item(stream: &mut TokenStream) -> Option<Item> {
                 _ => panic!("unexpected token"),
             };
 
-            let typename = match stream.advance() {
-                Token::Colon => match stream.advance() {
-                    Token::Identifier(ident) => ident,
-                    other => panic!("unexpected token {other:?}"),
-                },
+            let typename = match stream.peek() {
+                Token::Colon => {
+                    stream.advance();
+                    match stream.advance() {
+                        Token::Identifier(ident) => Some(ident),
+                        other => panic!("unexpected token {other:?}"),
+                    }
+                }
+                Token::Eq => None,
                 _ => panic!("unexpected token"),
             };
 
@@ -174,7 +178,7 @@ mod test {
             items.items[0],
             Item::Declaration {
                 name: "foo".into(),
-                typename: "int".into(),
+                typename: Some("int".into()),
                 value: Expression::LitInt(42)
             }
         );
@@ -199,7 +203,7 @@ mod test {
             items.items[0],
             Item::Declaration {
                 name: "func".into(),
-                typename: "fn".into(),
+                typename: Some("fn".into()),
                 value: Expression::Function {
                     body: vec![Item::Print(Expression::LitInt(42))]
                 }

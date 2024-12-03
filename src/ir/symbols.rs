@@ -38,3 +38,13 @@ pub enum Type {
     Bool,
     Function,
 }
+
+impl Type {
+    pub fn name(&self) -> &str {
+        match self {
+            Type::Int => "int",
+            Type::Bool => "bool",
+            Type::Function => "###FUNCTION###", // To make GCC error if this gets into the generated C code
+        }
+    }
+}

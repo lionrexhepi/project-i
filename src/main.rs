@@ -4,7 +4,7 @@ use std::io::Write;
 use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
-    let source = "let main:function = fn print 42 end".chars().collect();
+    let source = "let main = fn print 42 end".chars().collect();
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
     let ir = mangle(ast);
@@ -15,12 +15,11 @@ fn main() {
         .arg("-x")
         .arg("c")
         .arg("-o")
-        .arg("out")
+        .arg("out2")
         .arg("-")
         .stdin(std::process::Stdio::piped())
         .spawn()
         .unwrap();
     gcc.stdin.as_mut().unwrap().write_all(&buf).unwrap();
     gcc.wait().unwrap();
-    
 }

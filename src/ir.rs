@@ -1,7 +1,7 @@
 pub mod symbols;
 
 use smol_str::SmolStr;
-use symbols::{Symbol, SymbolTable};
+use symbols::{Symbol, SymbolTable, Type};
 
 use crate::ast::{Ast, Expression, Item};
 
@@ -57,17 +57,44 @@ fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
             typename,
             value,
         } => {
-            let ty = match symbols.get(&typename) {
-                Some(Symbol::Type(ty)) => *ty,
-                _ => panic!("undeclared type: {}", typename),
+            let named_type = match typename {
+                Some(typename) => match symbols.get(&typename) {
+                    Some(Symbol::Type(ty)) => Some(*ty),
+                    _ => panic!("undeclared type: {}", typename),
+                },
+                None => None,
             };
-            symbols.insert(&name, Symbol::Variable(ty));
+
+            let expr_ty = infer_type(&value, symbols);
+
+            if let Some(named_type) = named_type {
+                if named_type != expr_ty {
+                    panic!(
+                        "type mismatch: expected {:?}, got {:?}",
+                        named_type, expr_ty
+                    )
+                }
+            }
+
+            symbols.insert(&name, Symbol::Variable(expr_ty));
             vec![MangledItem::Declaration {
-                typename,
+                typename: expr_ty.name().into(),
                 var: name,
                 value: mangle_expression(value, symbols),
             }]
         }
+    }
+}
+
+fn infer_type(expr: &Expression, symbols: &SymbolTable) -> Type {
+    match expr {
+        Expression::LitInt(_) => Type::Int,
+        Expression::LitBool(_) => Type::Bool,
+        Expression::Identifier(name) => match symbols.get(name) {
+            Some(Symbol::Variable(ty)) => *ty,
+            _ => panic!("undeclared variable: {}", name),
+        },
+        Expression::Function { body: _ } => Type::Function,
     }
 }
 
@@ -110,7 +137,7 @@ mod test {
         let mut symbols = SymbolTable::default();
         let declaration = Item::Declaration {
             name: "foo".into(),
-            typename: "int".into(),
+            typename: Some("int".into()),
             value: Expression::LitInt(42),
         };
 
