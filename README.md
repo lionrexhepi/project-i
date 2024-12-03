@@ -4,7 +4,7 @@
 
 - [x] Working framework (Empty token, AST, IR, Codegen)
 - [x] Int & Bool literals
-- [ ] Identifiers
+- [x] Identifiers
 - [ ] Binary Expressions
 - [ ] Unary Expressions
 - [ ] If Statements

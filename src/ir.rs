@@ -1,4 +1,7 @@
+pub mod symbols;
+
 use smol_str::SmolStr;
+use symbols::{Symbol, SymbolTable};
 
 use crate::ast::{Ast, Expression, Item};
 
@@ -18,10 +21,17 @@ where
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum MangledItem {
     Print(MangledExpression),
+    Declaration {
+        ty: SmolStr,
+        var: SmolStr,
+        value: MangledExpression,
+    },
 }
 
+#[derive(Debug, PartialEq)]
 pub enum MangledExpression {
     LitInt(i64),
     LitBool(bool),
@@ -29,22 +39,39 @@ pub enum MangledExpression {
 }
 
 pub fn mangle(ast: Ast) -> MangledProgram {
+    let mut symbols = SymbolTable::default();
     MangledProgram {
-        items: ast.into_iter().flat_map(mangle_item).collect(),
+        items: ast
+            .into_iter()
+            .flat_map(|item| mangle_item(item, &mut symbols))
+            .collect(),
     }
 }
 
-fn mangle_item(item: Item) -> Vec<MangledItem> {
+fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
     match item {
-        Item::Print(expr) => vec![MangledItem::Print(mangle_expression(expr))],
+        Item::Print(expr) => vec![MangledItem::Print(mangle_expression(expr, symbols))],
+        Item::Declaration { name, value } => {
+            symbols.insert(&name, Symbol);
+            vec![MangledItem::Declaration {
+                ty: "int".into(),
+                var: name,
+                value: mangle_expression(value, symbols),
+            }]
+        }
     }
 }
 
-fn mangle_expression(expr: Expression) -> MangledExpression {
+fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledExpression {
     match expr {
         Expression::LitInt(int) => MangledExpression::LitInt(int),
         Expression::LitBool(bool) => MangledExpression::LitBool(bool),
-        Expression::Identifier(name) => MangledExpression::Variable(name),
+        Expression::Identifier(name) => {
+            if symbols.get(&name).is_none() {
+                panic!("undeclared variable: {}", name)
+            }
+            MangledExpression::Variable(name)
+        }
     }
 }
 
@@ -61,5 +88,35 @@ mod test {
             program.items[0],
             MangledItem::Print(MangledExpression::LitInt(42))
         ))
+    }
+
+    #[test]
+    fn test_declare() {
+        let mut symbols = SymbolTable::default();
+        let declaration = Item::Declaration {
+            name: "foo".into(),
+            value: Expression::LitInt(42),
+        };
+
+        let items = mangle_item(declaration, &mut symbols);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0],
+            MangledItem::Declaration {
+                ty: "int".into(),
+                var: "foo".into(),
+                value: MangledExpression::LitInt(42)
+            }
+        );
+        assert_eq!(symbols.get("foo"), Some(&Symbol))
+    }
+
+    #[test]
+    #[should_panic(expected = "undeclared variable: foo")]
+    fn test_undeclared() {
+        let mut symbols = SymbolTable::default();
+        let expression = Expression::Identifier("foo".into());
+        mangle_expression(expression, &mut symbols);
     }
 }

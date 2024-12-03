@@ -4,10 +4,12 @@ use smol_str::{SmolStr, SmolStrBuilder};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
-    Print,
     Identifier(SmolStr),
     Integer(i64),
     Boolean(bool),
+    Print,
+    Let,
+    Eq,
     Eof,
 }
 
@@ -27,7 +29,7 @@ impl TokenStream {
         self.inner.push_back(token);
     }
 
-    pub fn next(&mut self) -> Token {
+    pub fn advance(&mut self) -> Token {
         self.inner.pop_front().unwrap_or(Token::Eof)
     }
 }
@@ -40,6 +42,9 @@ pub fn lex(source: Vec<char>) -> TokenStream {
 
         match c {
             Some(' ') => {}
+            Some('=') => {
+                stream.push(Token::Eq);
+            }
             Some(other) if other.is_ascii_digit() => {
                 let mut lit = c.unwrap().to_digit(10).unwrap() as i64;
                 index += 1;
@@ -74,6 +79,7 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                                 "print" => Token::Print,
                                 "true" => Token::Boolean(true),
                                 "false" => Token::Boolean(false),
+                                "let" => Token::Let,
                                 _ => Token::Identifier(ident),
                             });
 
@@ -130,6 +136,21 @@ mod test {
         assert_eq!(
             stream.inner,
             vec![Token::Print, Token::Identifier("foo".into())]
+        );
+    }
+
+    #[test]
+    fn test_let() {
+        let source = "let x = 42";
+        let stream = lex(source.chars().collect());
+        assert_eq!(
+            stream.inner,
+            vec![
+                Token::Let,
+                Token::Identifier("x".into()),
+                Token::Eq,
+                Token::Integer(42)
+            ]
         );
     }
 }

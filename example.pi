@@ -19,3 +19,11 @@ let main = fn(): i32 with
     std::io::print("number2 + 1: ");
     std::io::println(addOne(number2);
 end;
+
+let par = fn() with
+    use std.concurrency;
+    let nursery = std::concurrency::nursery();
+    for i in 0..10 do
+        nursery.spawn(async() with print i end);
+    end;
+end;
