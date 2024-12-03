@@ -4,7 +4,9 @@ use std::io::Write;
 use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
-    let source = "let main = fn print 42 end".chars().collect();
+    let source = "let main = fn if true do print 43 else  print 24 end end"
+        .chars()
+        .collect();
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
     let ir = mangle(ast);

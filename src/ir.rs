@@ -3,7 +3,7 @@ pub mod symbols;
 use smol_str::SmolStr;
 use symbols::{Symbol, SymbolTable, Type};
 
-use crate::ast::{Ast, Expression, Item};
+use crate::ast::{Ast, Else, Expression, If, Item};
 
 pub struct MangledProgram {
     pub items: Vec<MangledItem>,
@@ -23,20 +23,24 @@ where
 
 #[derive(Debug, PartialEq)]
 pub enum MangledItem {
-    Print(MangledExpression),
+    Print(Box<MangledItem>),
     Declaration {
         typename: SmolStr,
         var: SmolStr,
-        value: MangledExpression,
+        value: Box<MangledItem>,
     },
-}
-
-#[derive(Debug, PartialEq)]
-pub enum MangledExpression {
     LitInt(i64),
     LitBool(bool),
     Variable(SmolStr),
-    Function { body: Vec<MangledItem> },
+    Function {
+        body: Vec<MangledItem>,
+    },
+    If {
+        condition: Box<MangledItem>,
+        then: Vec<MangledItem>,
+        otherwise: Option<Box<MangledItem>>,
+    },
+    Block(Vec<MangledItem>),
 }
 
 pub fn mangle(ast: Ast) -> MangledProgram {
@@ -51,7 +55,9 @@ pub fn mangle(ast: Ast) -> MangledProgram {
 
 fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
     match item {
-        Item::Print(expr) => vec![MangledItem::Print(mangle_expression(expr, symbols))],
+        Item::Print(expr) => vec![MangledItem::Print(Box::new(mangle_expression(
+            expr, symbols,
+        )))],
         Item::Declaration {
             name,
             typename,
@@ -80,9 +86,10 @@ fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
             vec![MangledItem::Declaration {
                 typename: expr_ty.name().into(),
                 var: name,
-                value: mangle_expression(value, symbols),
+                value: Box::new(mangle_expression(value, symbols)),
             }]
         }
+        Item::Expression(expr) => vec![mangle_expression(expr, symbols)],
     }
 }
 
@@ -95,25 +102,59 @@ fn infer_type(expr: &Expression, symbols: &SymbolTable) -> Type {
             _ => panic!("undeclared variable: {}", name),
         },
         Expression::Function { body: _ } => Type::Function,
+        Expression::If(_) => todo!(),
     }
 }
 
-fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledExpression {
+fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem {
     match expr {
-        Expression::LitInt(int) => MangledExpression::LitInt(int),
-        Expression::LitBool(bool) => MangledExpression::LitBool(bool),
+        Expression::LitInt(int) => MangledItem::LitInt(int),
+        Expression::LitBool(bool) => MangledItem::LitBool(bool),
         Expression::Identifier(name) => {
             if symbols.get(&name).is_none() {
                 panic!("undeclared variable: {}", name)
             }
-            MangledExpression::Variable(name)
+            MangledItem::Variable(name)
         }
-        Expression::Function { body } => MangledExpression::Function {
+        Expression::Function { body } => MangledItem::Function {
             body: body
                 .into_iter()
                 .flat_map(|item| mangle_item(item, symbols))
                 .collect(),
         },
+        Expression::If(r#if) => mangle_if(r#if, symbols),
+    }
+}
+
+fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
+    if infer_type(&r#if.condition, symbols) != Type::Bool {
+        panic!("expected boolean expression")
+    }
+
+    let condition = Box::new(mangle_expression(*r#if.condition, symbols));
+
+    let then = r#if
+        .then
+        .into_iter()
+        .flat_map(|item| mangle_item(item, symbols))
+        .collect();
+
+    let otherwise = r#if
+        .otherwise
+        .map(|expr| match expr {
+            Else::Block(vec) => MangledItem::Block(
+                vec.into_iter()
+                    .flat_map(|item| mangle_item(item, symbols))
+                    .collect(),
+            ),
+            Else::If(r#if) => mangle_if(*r#if, symbols),
+        })
+        .map(Box::new);
+
+    MangledItem::If {
+        condition,
+        then,
+        otherwise,
     }
 }
 
@@ -126,10 +167,10 @@ mod test {
         let ast = Ast::from([Item::Print(Expression::LitInt(42))]);
         let program = mangle(ast);
         assert_eq!(program.items.len(), 1);
-        assert!(matches!(
+        assert_eq!(
             program.items[0],
-            MangledItem::Print(MangledExpression::LitInt(42))
-        ))
+            MangledItem::Print(Box::new(MangledItem::LitInt(42)))
+        );
     }
 
     #[test]
@@ -149,7 +190,7 @@ mod test {
             MangledItem::Declaration {
                 typename: "int".into(),
                 var: "foo".into(),
-                value: MangledExpression::LitInt(42)
+                value: Box::new(MangledItem::LitInt(42))
             }
         );
         assert_eq!(

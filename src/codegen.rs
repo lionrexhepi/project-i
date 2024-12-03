@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::ir::{MangledExpression, MangledItem, MangledProgram};
+use crate::ir::{MangledItem, MangledProgram};
 
 pub fn write_c(program: MangledProgram, to: &mut impl Write) {
     for item in program.items {
@@ -12,14 +12,17 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
     match item {
         MangledItem::Print(expr) => {
             to.write_all(b"printf(\"%ld\\n\", ").unwrap();
-            write_expression(expr, to);
+            write_item(*expr, to);
             to.write_all(b");").unwrap();
         }
         MangledItem::Declaration {
             typename: _,
             var,
-            value: MangledExpression::Function { body },
-        } => {
+            value,
+        } if matches!(&*value, MangledItem::Function { .. }) => {
+            let MangledItem::Function { body } = *value else {
+                unreachable!()
+            };
             write!(to, "int {}(){{", var).unwrap();
             for item in body {
                 write_item(item, to);
@@ -32,18 +35,34 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             value,
         } => {
             write!(to, "{} {} = ", ty, var).unwrap();
-            write_expression(value, to);
+            write_item(*value, to);
             to.write_all(b";").unwrap();
         }
-    }
-}
-
-fn write_expression(expr: MangledExpression, to: &mut impl Write) {
-    match expr {
-        MangledExpression::LitInt(i) => write!(to, "{}", i).unwrap(),
-        MangledExpression::LitBool(b) => write!(to, "{}", b).unwrap(),
-        MangledExpression::Variable(smol_str) => write!(to, "{}", smol_str).unwrap(),
-        _ => panic!("No fn exprs yet buddy"),
+        MangledItem::LitInt(i) => write!(to, "{}", i).unwrap(),
+        MangledItem::LitBool(b) => write!(to, "{}", b as u8).unwrap(),
+        MangledItem::Variable(smol_str) => write!(to, "{}", smol_str).unwrap(),
+        MangledItem::Block(block) => {
+            to.write_all(b"{").unwrap();
+            for item in block {
+                write_item(item, to);
+            }
+            to.write_all(b"}").unwrap();
+        }
+        MangledItem::If {
+            condition,
+            then,
+            otherwise,
+        } => {
+            to.write_all(b"if (").unwrap();
+            write_item(*condition, to);
+            to.write_all(b")").unwrap();
+            write_item(MangledItem::Block(then), to);
+            if let Some(otherwise) = otherwise {
+                to.write_all(b"else").unwrap();
+                write_item(*otherwise, to);
+            }
+        }
+        MangledItem::Function { .. } => unreachable!(),
     }
 }
 
@@ -55,7 +74,7 @@ mod test {
 
     #[test]
     fn test_print_int() {
-        let program = MangledProgram::from([MangledItem::Print(MangledExpression::LitInt(42))]);
+        let program = MangledProgram::from([MangledItem::Print(Box::new(MangledItem::LitInt(42)))]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);
         assert_eq!(buf, b"printf(\"%ld\\n\", 42);");
@@ -63,10 +82,11 @@ mod test {
 
     #[test]
     fn test_print_bool() {
-        let program = MangledProgram::from([MangledItem::Print(MangledExpression::LitBool(true))]);
+        let program =
+            MangledProgram::from([MangledItem::Print(Box::new(MangledItem::LitBool(true)))]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);
-        assert_eq!(str::from_utf8(&buf).unwrap(), "printf(\"%ld\\n\", true);");
+        assert_eq!(str::from_utf8(&buf).unwrap(), "printf(\"%ld\\n\", 1);");
     }
 
     #[test]
@@ -74,7 +94,7 @@ mod test {
         let program = MangledProgram::from([MangledItem::Declaration {
             typename: "int".into(),
             var: "foo".into(),
-            value: MangledExpression::LitInt(42),
+            value: Box::new(MangledItem::LitInt(42)),
         }]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);

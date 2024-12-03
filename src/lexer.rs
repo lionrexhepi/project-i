@@ -17,6 +17,9 @@ pub enum Token {
     Semicolon,
     Fn,
     With,
+    If,
+    Else,
+    Do,
     End,
     Eof,
 }
@@ -69,17 +72,7 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                     }
                     _ => {
                         let ident = ident.finish();
-                        stream.push(match ident.as_str() {
-                            "print" => Token::Print,
-                            "true" => Token::Boolean(true),
-                            "false" => Token::Boolean(false),
-                            "let" => Token::Let,
-                            "fn" => Token::Fn,
-                            "end" => Token::End,
-                            "with" => Token::With,
-                            _ => Token::Identifier(ident),
-                        });
-
+                        stream.push(special_ident(ident));
                         break;
                     }
                 }
@@ -116,6 +109,21 @@ pub fn lex(source: Vec<char>) -> TokenStream {
     }
 
     stream
+}
+
+fn special_ident(ident: SmolStr) -> Token {
+    match ident.as_str() {
+        "print" => Token::Print,
+        "true" => Token::Boolean(true),
+        "false" => Token::Boolean(false),
+        "let" => Token::Let,
+        "fn" => Token::Fn,
+        "end" => Token::End,
+        "if" => Token::If,
+        "else" => Token::Else,
+        "do" => Token::Do,
+        _ => Token::Identifier(ident),
+    }
 }
 
 #[cfg(test)]

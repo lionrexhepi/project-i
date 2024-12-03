@@ -33,6 +33,7 @@ pub enum Item {
         typename: Option<SmolStr>,
         value: Expression,
     },
+    Expression(Expression),
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,6 +42,28 @@ pub enum Expression {
     LitBool(bool),
     Identifier(SmolStr),
     Function { body: Vec<Item> },
+    If(If),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct If {
+    pub condition: Box<Expression>,
+    pub then: Vec<Item>,
+    pub otherwise: Option<Else>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Else {
+    Block(Vec<Item>),
+    If(Box<If>),
+}
+
+macro_rules! expect {
+    ( $stream:ident, $pat:pat) => {
+        let $pat = $stream.advance() else {
+            panic!("unexpected token")
+        };
+    };
 }
 
 pub fn parse(stream: &mut TokenStream) -> Ast {
@@ -59,41 +82,38 @@ pub fn parse(stream: &mut TokenStream) -> Ast {
 }
 
 fn parse_item(stream: &mut TokenStream) -> Option<Item> {
-    let item = match stream.advance() {
+    let item = match stream.peek() {
         Token::Eof => return None,
         Token::Print => {
+            stream.advance();
             let expression = parse_expression(stream);
             Item::Print(expression)
         }
         Token::Let => {
-            let name = match stream.advance() {
-                Token::Identifier(ident) => ident,
-                _ => panic!("unexpected token"),
-            };
+            stream.advance();
+            expect!(stream, Token::Identifier(name));
 
             let typename = match stream.peek() {
                 Token::Colon => {
                     stream.advance();
-                    match stream.advance() {
-                        Token::Identifier(ident) => Some(ident),
-                        other => panic!("unexpected token {other:?}"),
-                    }
+                    expect!(stream, Token::Identifier(ident));
+                    Some(ident)
                 }
                 Token::Eq => None,
                 _ => panic!("unexpected token"),
             };
 
-            let value = match stream.advance() {
-                Token::Eq => parse_expression(stream),
-                _ => panic!("unexpected token"),
-            };
+            expect!(stream, Token::Eq);
+
+            let value = parse_expression(stream);
+
             Item::Declaration {
                 name,
                 typename,
                 value,
             }
         }
-        other => panic!("Unexpected token: {other:?}"),
+        _ => Item::Expression(parse_expression(stream)),
     };
     Some(item)
 }
@@ -121,7 +141,64 @@ fn parse_expression(stream: &mut TokenStream) -> Expression {
             }
             Expression::Function { body }
         }
-        _ => panic!("unexpected token"),
+        Token::If => {
+            let if_expr = parse_if(stream);
+            Expression::If(if_expr)
+        }
+        other => panic!("unexpected token {other:?}"),
+    }
+}
+
+fn parse_if(stream: &mut TokenStream) -> If {
+    let condition = Box::new(parse_expression(stream));
+    expect!(stream, Token::Do);
+    let mut then = Vec::new();
+    let otherwise = loop {
+        match stream.peek() {
+            Token::End => {
+                stream.advance();
+                break None;
+            }
+            Token::Else => {
+                stream.advance();
+                break Some(parse_else(stream));
+            }
+            _ => {
+                let Some(item) = parse_item(stream) else {
+                    panic!("Unclosed block");
+                };
+                then.push(item);
+            }
+        }
+    };
+    If {
+        condition,
+        then,
+        otherwise,
+    }
+}
+
+fn parse_else(stream: &mut TokenStream) -> Else {
+    if let Token::If = stream.peek() {
+        stream.advance();
+        Else::If(Box::new(parse_if(stream)))
+    } else {
+        let mut block = Vec::new();
+        loop {
+            match stream.peek() {
+                Token::End => {
+                    stream.advance();
+                    break;
+                }
+                _ => {
+                    let Some(item) = parse_item(stream) else {
+                        panic!("Unclosed block");
+                    };
+                    block.push(item);
+                }
+            }
+        }
+        Else::Block(block)
     }
 }
 
