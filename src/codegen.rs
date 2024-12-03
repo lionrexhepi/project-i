@@ -4,21 +4,36 @@ use crate::ir::{MangledExpression, MangledItem, MangledProgram};
 
 pub fn write_c(program: MangledProgram, to: &mut impl Write) {
     for item in program.items {
-        match item {
-            MangledItem::Print(expr) => {
-                to.write_all(b"printf(\"%ld\\n\", ").unwrap();
-                write_expression(expr, to);
-                to.write_all(b");").unwrap();
+        write_item(item, to);
+    }
+}
+
+fn write_item(item: MangledItem, to: &mut impl Write) {
+    match item {
+        MangledItem::Print(expr) => {
+            to.write_all(b"printf(\"%ld\\n\", ").unwrap();
+            write_expression(expr, to);
+            to.write_all(b");").unwrap();
+        }
+        MangledItem::Declaration {
+            typename: _,
+            var,
+            value: MangledExpression::Function { body },
+        } => {
+            write!(to, "int {}(){{", var).unwrap();
+            for item in body {
+                write_item(item, to);
             }
-            MangledItem::Declaration {
-                typename: ty,
-                var,
-                value,
-            } => {
-                write!(to, "{} {} = ", ty, var).unwrap();
-                write_expression(value, to);
-                to.write_all(b";").unwrap();
-            }
+            to.write_all(b"return 0;}").unwrap();
+        }
+        MangledItem::Declaration {
+            typename: ty,
+            var,
+            value,
+        } => {
+            write!(to, "{} {} = ", ty, var).unwrap();
+            write_expression(value, to);
+            to.write_all(b";").unwrap();
         }
     }
 }
@@ -28,6 +43,7 @@ fn write_expression(expr: MangledExpression, to: &mut impl Write) {
         MangledExpression::LitInt(i) => write!(to, "{}", i).unwrap(),
         MangledExpression::LitBool(b) => write!(to, "{}", b).unwrap(),
         MangledExpression::Variable(smol_str) => write!(to, "{}", smol_str).unwrap(),
+        _ => panic!("No fn exprs yet buddy"),
     }
 }
 

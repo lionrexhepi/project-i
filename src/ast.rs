@@ -40,58 +40,85 @@ pub enum Expression {
     LitInt(i64),
     LitBool(bool),
     Identifier(SmolStr),
+    Function { body: Vec<Item> },
 }
 
 pub fn parse(stream: &mut TokenStream) -> Ast {
     let mut items = Vec::new();
     loop {
-        match stream.advance() {
-            Token::Eof => break,
-            Token::Print => {
-                let expression = match stream.advance() {
-                    Token::Integer(i) => Expression::LitInt(i),
-                    Token::Boolean(b) => Expression::LitBool(b),
-                    Token::Identifier(ident) => Expression::Identifier(ident),
-                    _ => panic!("unexpected token"),
-                };
-                items.push(Item::Print(expression));
-            }
-            Token::Let => {
-                let name = match stream.advance() {
-                    Token::Identifier(ident) => ident,
-                    _ => panic!("unexpected token"),
-                };
-
-                let typename = match stream.advance() {
-                    Token::Colon => match stream.advance() {
-                        Token::Identifier(ident) => ident,
-                        _ => panic!("unexpected token"),
-                    },
-                    _ => panic!("unexpected token"),
-                };
-
-                let value = match stream.advance() {
-                    Token::Eq => match stream.advance() {
-                        Token::Integer(i) => Expression::LitInt(i),
-                        Token::Boolean(b) => Expression::LitBool(b),
-                        Token::Identifier(ident) => Expression::Identifier(ident),
-                        _ => panic!("unexpected token"),
-                    },
-                    _ => panic!("unexpected token"),
-                };
-                items.push(Item::Declaration {
-                    name,
-                    typename,
-                    value,
-                });
-            }
-            other => panic!("Unexpected token: {other:?}"),
+        if let Some(item) = parse_item(stream) {
+            items.push(item);
+        } else {
+            break;
         }
         let (Token::Semicolon | Token::Eof) = stream.advance() else {
             panic!("Expected semicolon to terminate statement")
         };
     }
     Ast { items }
+}
+
+fn parse_item(stream: &mut TokenStream) -> Option<Item> {
+    let item = match stream.advance() {
+        Token::Eof => return None,
+        Token::Print => {
+            let expression = parse_expression(stream);
+            Item::Print(expression)
+        }
+        Token::Let => {
+            let name = match stream.advance() {
+                Token::Identifier(ident) => ident,
+                _ => panic!("unexpected token"),
+            };
+
+            let typename = match stream.advance() {
+                Token::Colon => match stream.advance() {
+                    Token::Identifier(ident) => ident,
+                    other => panic!("unexpected token {other:?}"),
+                },
+                _ => panic!("unexpected token"),
+            };
+
+            let value = match stream.advance() {
+                Token::Eq => parse_expression(stream),
+                _ => panic!("unexpected token"),
+            };
+            Item::Declaration {
+                name,
+                typename,
+                value,
+            }
+        }
+        other => panic!("Unexpected token: {other:?}"),
+    };
+    Some(item)
+}
+
+fn parse_expression(stream: &mut TokenStream) -> Expression {
+    match stream.advance() {
+        Token::Integer(i) => Expression::LitInt(i),
+        Token::Boolean(b) => Expression::LitBool(b),
+        Token::Identifier(ident) => Expression::Identifier(ident),
+        Token::Fn => {
+            let mut body = Vec::new();
+            loop {
+                match stream.peek() {
+                    Token::End => {
+                        stream.advance();
+                        break;
+                    }
+                    _ => {
+                        let Some(item) = parse_item(stream) else {
+                            break;
+                        };
+                        body.push(item);
+                    }
+                }
+            }
+            Expression::Function { body }
+        }
+        _ => panic!("unexpected token"),
+    }
 }
 
 #[cfg(test)]
@@ -149,6 +176,33 @@ mod test {
                 name: "foo".into(),
                 typename: "int".into(),
                 value: Expression::LitInt(42)
+            }
+        );
+    }
+
+    #[test]
+    fn test_fn_expr() {
+        let mut stream = TokenStream::from([
+            Token::Let,
+            Token::Identifier("func".into()),
+            Token::Colon,
+            Token::Identifier("fn".into()),
+            Token::Eq,
+            Token::Fn,
+            Token::Print,
+            Token::Integer(42),
+            Token::End,
+        ]);
+        let items = parse(&mut stream);
+        assert_eq!(items.items.len(), 1);
+        assert_eq!(
+            items.items[0],
+            Item::Declaration {
+                name: "func".into(),
+                typename: "fn".into(),
+                value: Expression::Function {
+                    body: vec![Item::Print(Expression::LitInt(42))]
+                }
             }
         );
     }

@@ -12,6 +12,8 @@ pub enum Token {
     Eq,
     Colon,
     Semicolon,
+    Fn,
+    End,
     Eof,
 }
 
@@ -33,6 +35,10 @@ impl TokenStream {
 
     pub fn advance(&mut self) -> Token {
         self.inner.pop_front().unwrap_or(Token::Eof)
+    }
+
+    pub fn peek(&self) -> &Token {
+        self.inner.front().unwrap_or(&Token::Eof)
     }
 }
 
@@ -89,6 +95,8 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                                 "true" => Token::Boolean(true),
                                 "false" => Token::Boolean(false),
                                 "let" => Token::Let,
+                                "fn" => Token::Fn,
+                                "end" => Token::End,
                                 _ => Token::Identifier(ident),
                             });
 

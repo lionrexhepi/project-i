@@ -11,7 +11,7 @@ impl Default for SymbolTable {
         let mut symbols = HashMap::new();
         symbols.insert("int".into(), Symbol::Type(Type::Int));
         symbols.insert("bool".into(), Symbol::Type(Type::Bool));
-        symbols.insert("fn".into(), Symbol::Type(Type::Function));
+        symbols.insert("function".into(), Symbol::Type(Type::Function));
         SymbolTable { symbols }
     }
 }

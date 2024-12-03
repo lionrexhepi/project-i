@@ -36,6 +36,7 @@ pub enum MangledExpression {
     LitInt(i64),
     LitBool(bool),
     Variable(SmolStr),
+    Function { body: Vec<MangledItem> },
 }
 
 pub fn mangle(ast: Ast) -> MangledProgram {
@@ -80,6 +81,12 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledExpr
             }
             MangledExpression::Variable(name)
         }
+        Expression::Function { body } => MangledExpression::Function {
+            body: body
+                .into_iter()
+                .flat_map(|item| mangle_item(item, symbols))
+                .collect(),
+        },
     }
 }
 
