@@ -11,6 +11,7 @@ pub enum Token {
     Let,
     Eq,
     Colon,
+    Semicolon,
     Eof,
 }
 
@@ -45,6 +46,9 @@ pub fn lex(source: Vec<char>) -> TokenStream {
             Some(' ') => {}
             Some(':') => {
                 stream.push(Token::Colon);
+            }
+            Some(';') => {
+                stream.push(Token::Semicolon);
             }
             Some('=') => {
                 stream.push(Token::Eq);

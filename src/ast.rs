@@ -85,12 +85,11 @@ pub fn parse(stream: &mut TokenStream) -> Ast {
                     value,
                 });
             }
-            Token::Identifier(_) => todo!(),
-            Token::Integer(_) => todo!(),
-            Token::Boolean(_) => todo!(),
-            Token::Eq => todo!(),
-            Token::Colon => todo!(),
+            other => panic!("Unexpected token: {other:?}"),
         }
+        let (Token::Semicolon | Token::Eof) = stream.advance() else {
+            panic!("Expected semicolon to terminate statement")
+        };
     }
     Ast { items }
 }
