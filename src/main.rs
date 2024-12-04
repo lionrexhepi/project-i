@@ -4,7 +4,13 @@ use std::io::Write;
 use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
-    let source = "let main = fn if true do print 43 else  print 24 end end"
+    let source = r#"let main = fn
+            if true do
+                print 43
+            else
+                print 24
+            end
+        end"#
         .chars()
         .collect();
     let mut tokens = lex(source);

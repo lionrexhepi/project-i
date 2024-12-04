@@ -7,9 +7,9 @@
 - [x] Identifiers
 - [x] Declaring variables
 - [ ] Types
-  - [ ] Int & Function ptr
-  - [ ] Store the value of a variable
-  - [ ] 
+  - [X] Int & Function ptr
+  - [X] Store the type of a variable
+  - [ ]
 - [ ] Binary Expressions
 - [ ] Unary Expressions
 - [ ] If Statements
