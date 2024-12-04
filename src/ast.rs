@@ -114,30 +114,34 @@ fn parse_expression(stream: &mut TokenStream) -> Expression {
         Token::Integer(i) => Expression::LitInt(i),
         Token::Boolean(b) => Expression::LitBool(b),
         Token::Identifier(ident) => Expression::Identifier(ident),
-        Token::Fn => {
-            let mut body = Vec::new();
-            loop {
-                match stream.peek() {
-                    Token::End => {
-                        stream.advance();
-                        break;
-                    }
-                    _ => {
-                        let Some(item) = parse_item(stream) else {
-                            break;
-                        };
-                        body.push(item);
-                    }
-                }
-            }
-            Expression::Function { body }
-        }
+        Token::Fn => Expression::Function {
+            body: parse_block_to_end(stream),
+        },
         Token::If => {
             let if_expr = parse_if(stream);
             Expression::If(if_expr)
         }
         other => panic!("unexpected token {other:?}"),
     }
+}
+
+fn parse_block_to_end(stream: &mut TokenStream) -> Vec<Item> {
+    let mut block = Vec::new();
+    loop {
+        match stream.peek() {
+            Token::End => {
+                stream.advance();
+                break;
+            }
+            _ => {
+                let Some(item) = parse_item(stream) else {
+                    panic!("Unclosed block");
+                };
+                block.push(item);
+            }
+        }
+    }
+    block
 }
 
 #[cfg(test)]

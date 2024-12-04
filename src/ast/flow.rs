@@ -4,7 +4,7 @@ use crate::{
     lexer::{Token, TokenStream},
 };
 
-use super::{Expression, Item};
+use super::{parse_block_to_end, Expression, Item};
 
 #[derive(Debug, PartialEq)]
 pub struct If {
@@ -53,21 +53,6 @@ fn parse_else(stream: &mut TokenStream) -> Else {
         stream.advance();
         Else::If(Box::new(parse_if(stream)))
     } else {
-        let mut block = Vec::new();
-        loop {
-            match stream.peek() {
-                Token::End => {
-                    stream.advance();
-                    break;
-                }
-                _ => {
-                    let Some(item) = parse_item(stream) else {
-                        panic!("Unclosed block");
-                    };
-                    block.push(item);
-                }
-            }
-        }
-        Else::Block(block)
+        Else::Block(parse_block_to_end(stream))
     }
 }
