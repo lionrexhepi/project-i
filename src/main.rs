@@ -4,15 +4,15 @@ use std::io::Write;
 use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
-    let source = r#"let main = fn
-            if true do
+    let source = r#"let main = fn {
+            if true {
                 print 43
-            else
+            } else {
                 print 24
-            end
-        end"#
-        .chars()
-        .collect();
+            }
+        }"#
+    .chars()
+    .collect();
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
     let ir = mangle(ast);

@@ -19,8 +19,8 @@ pub enum Token {
     With,
     If,
     Else,
-    Do,
-    End,
+    LBrace,
+    RBrace,
     Eof,
 }
 
@@ -103,6 +103,8 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                 ')' => Token::RParen,
                 '=' => Token::Eq,
                 ':' => Token::Colon,
+                '{' => Token::LBrace,
+                '}' => Token::RBrace,
                 other => panic!("unexpected character: {}", other),
             });
         }
@@ -118,10 +120,8 @@ fn special_ident(ident: SmolStr) -> Token {
         "false" => Token::Boolean(false),
         "let" => Token::Let,
         "fn" => Token::Fn,
-        "end" => Token::End,
         "if" => Token::If,
         "else" => Token::Else,
-        "do" => Token::Do,
         _ => Token::Identifier(ident),
     }
 }

@@ -6,7 +6,15 @@ let fact = fn(n: u32): u32 with
     end
 end;
 
-let add = fn(a: i32, b: i32): i32 does a + b end;
+fn main() {
+            if true {
+                print 43
+            } else {
+                print 24
+            }
+        }
+
+fn add(a: i32, b: i32): i32 { a + b };
 
 let addOne = add(1);
 

@@ -1,10 +1,9 @@
 use crate::{
-    ast::{parse_expression, parse_item},
-    expect,
+    ast::parse_expression,
     lexer::{Token, TokenStream},
 };
 
-use super::{parse_block_to_end, Expression, Item};
+use super::{parse_block, Expression, Item};
 
 #[derive(Debug, PartialEq)]
 pub struct If {
@@ -21,25 +20,12 @@ pub enum Else {
 
 pub fn parse_if(stream: &mut TokenStream) -> If {
     let condition = Box::new(parse_expression(stream));
-    expect!(stream, Token::Do);
-    let mut then = Vec::new();
-    let otherwise = loop {
-        match stream.peek() {
-            Token::End => {
-                stream.advance();
-                break None;
-            }
-            Token::Else => {
-                stream.advance();
-                break Some(parse_else(stream));
-            }
-            _ => {
-                let Some(item) = parse_item(stream) else {
-                    panic!("Unclosed block");
-                };
-                then.push(item);
-            }
-        }
+    let then = parse_block(stream);
+    let otherwise = if let Token::Else = stream.peek() {
+        stream.advance();
+        Some(parse_else(stream))
+    } else {
+        None
     };
     If {
         condition,
@@ -53,6 +39,6 @@ fn parse_else(stream: &mut TokenStream) -> Else {
         stream.advance();
         Else::If(Box::new(parse_if(stream)))
     } else {
-        Else::Block(parse_block_to_end(stream))
+        Else::Block(parse_block(stream))
     }
 }

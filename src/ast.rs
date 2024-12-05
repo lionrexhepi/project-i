@@ -115,7 +115,7 @@ fn parse_expression(stream: &mut TokenStream) -> Expression {
         Token::Boolean(b) => Expression::LitBool(b),
         Token::Identifier(ident) => Expression::Identifier(ident),
         Token::Fn => Expression::Function {
-            body: parse_block_to_end(stream),
+            body: parse_block(stream),
         },
         Token::If => {
             let if_expr = parse_if(stream);
@@ -125,11 +125,12 @@ fn parse_expression(stream: &mut TokenStream) -> Expression {
     }
 }
 
-fn parse_block_to_end(stream: &mut TokenStream) -> Vec<Item> {
+fn parse_block(stream: &mut TokenStream) -> Vec<Item> {
+    expect!(stream, Token::LBrace);
     let mut block = Vec::new();
     loop {
         match stream.peek() {
-            Token::End => {
+            Token::RBrace => {
                 stream.advance();
                 break;
             }
@@ -183,13 +184,14 @@ mod test {
 
     #[test]
     fn test_let_int() {
+        use Token::*;
         let mut stream = TokenStream::from([
-            Token::Let,
-            Token::Identifier("foo".into()),
-            Token::Colon,
-            Token::Identifier("int".into()),
-            Token::Eq,
-            Token::Integer(42),
+            Let,
+            Identifier("foo".into()),
+            Colon,
+            Identifier("int".into()),
+            Eq,
+            Integer(42),
         ]);
         let items = parse(&mut stream);
         assert_eq!(items.items.len(), 1);
@@ -205,16 +207,18 @@ mod test {
 
     #[test]
     fn test_fn_expr() {
+        use Token::*;
         let mut stream = TokenStream::from([
-            Token::Let,
-            Token::Identifier("func".into()),
-            Token::Colon,
-            Token::Identifier("fn".into()),
-            Token::Eq,
-            Token::Fn,
-            Token::Print,
-            Token::Integer(42),
-            Token::End,
+            Let,
+            Identifier("func".into()),
+            Colon,
+            Identifier("fn".into()),
+            Eq,
+            Fn,
+            LBrace,
+            Print,
+            Integer(42),
+            RBrace,
         ]);
         let items = parse(&mut stream);
         assert_eq!(items.items.len(), 1);
