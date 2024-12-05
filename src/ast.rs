@@ -1,3 +1,4 @@
+mod binary;
 mod flow;
 use flow::{parse_block, parse_if, parse_while};
 pub use flow::{Block, Else, If, While};

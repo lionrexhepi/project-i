@@ -4,23 +4,37 @@ use smol_str::{SmolStr, SmolStrBuilder};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
-    Identifier(SmolStr),
+    // Literals
     Integer(i64),
     Boolean(bool),
+    //Identifiers
+    Identifier(SmolStr),
+    // Keywords
     Print,
+    Fn,
+    If,
+    While,
+    Else,
     Let,
-    Eq,
+    // Punctuation
     Colon,
     LParen,
     RParen,
     Comma,
     Semicolon,
-    Fn,
-    If,
-    While,
-    Else,
     LBrace,
     RBrace,
+    // Operators
+    Eq,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Gt,
+    Lt,
+    Or,
+    And,
+    /// EOF.
     Eof,
 }
 
@@ -101,10 +115,18 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                 ';' => Token::Semicolon,
                 '(' => Token::LParen,
                 ')' => Token::RParen,
-                '=' => Token::Eq,
                 ':' => Token::Colon,
                 '{' => Token::LBrace,
                 '}' => Token::RBrace,
+                '=' => Token::Eq,
+                '+' => Token::Plus,
+                '-' => Token::Minus,
+                '*' => Token::Star,
+                '/' => Token::Slash,
+                '>' => Token::Gt,
+                '<' => Token::Lt,
+                '|' => Token::Or,
+                '&' => Token::And,
                 other => panic!("unexpected character: {}", other),
             });
         }
