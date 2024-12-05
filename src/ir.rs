@@ -3,7 +3,7 @@ pub mod symbols;
 use smol_str::SmolStr;
 use symbols::{Symbol, SymbolTable, Type};
 
-use crate::ast::{Ast, Else, Expression, If, Item};
+use crate::ast::{Ast, Block, Else, Expression, If, Item, While};
 
 pub struct MangledProgram {
     pub items: Vec<MangledItem>,
@@ -39,6 +39,10 @@ pub enum MangledItem {
         condition: Box<MangledItem>,
         then: Vec<MangledItem>,
         otherwise: Option<Box<MangledItem>>,
+    },
+    Loop {
+        condition: Box<MangledItem>,
+        body: Vec<MangledItem>,
     },
     Block(Vec<MangledItem>),
 }
@@ -103,6 +107,7 @@ fn infer_type(expr: &Expression, symbols: &SymbolTable) -> Type {
         },
         Expression::Function { body: _ } => Type::Function,
         Expression::If(_) => todo!(),
+        Expression::While(_) => todo!(),
     }
 }
 
@@ -117,12 +122,20 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
             MangledItem::Variable(name)
         }
         Expression::Function { body } => MangledItem::Function {
-            body: body
-                .into_iter()
-                .flat_map(|item| mangle_item(item, symbols))
-                .collect(),
+            body: mangle_block(body, symbols),
         },
         Expression::If(r#if) => mangle_if(r#if, symbols),
+        Expression::While(While { condition, body }) => {
+            if infer_type(&condition, symbols) != Type::Bool {
+                panic!("expected boolean expression")
+            }
+
+            let condition = Box::new(mangle_expression(*condition, symbols));
+
+            let body = mangle_block(body, symbols);
+
+            MangledItem::Loop { condition, body }
+        }
     }
 }
 
@@ -133,20 +146,12 @@ fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
 
     let condition = Box::new(mangle_expression(*r#if.condition, symbols));
 
-    let then = r#if
-        .then
-        .into_iter()
-        .flat_map(|item| mangle_item(item, symbols))
-        .collect();
+    let then = mangle_block(r#if.then, symbols);
 
     let otherwise = r#if
         .otherwise
         .map(|expr| match expr {
-            Else::Block(vec) => MangledItem::Block(
-                vec.into_iter()
-                    .flat_map(|item| mangle_item(item, symbols))
-                    .collect(),
-            ),
+            Else::Block(block) => MangledItem::Block(mangle_block(block, symbols)),
             Else::If(r#if) => mangle_if(*r#if, symbols),
         })
         .map(Box::new);
@@ -156,6 +161,13 @@ fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
         then,
         otherwise,
     }
+}
+
+fn mangle_block(block: Block, symbols: &mut SymbolTable) -> Vec<MangledItem> {
+    block
+        .into_iter()
+        .flat_map(|item| mangle_item(item, symbols))
+        .collect()
 }
 
 #[cfg(test)]

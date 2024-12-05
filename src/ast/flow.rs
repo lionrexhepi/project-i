@@ -1,21 +1,50 @@
+//! Flow control structures like `if` and `while`.
+//! All parser functions assume that the relevant keywords (if, while, else, ...) have already been consumed.
+
 use crate::{
-    ast::parse_expression,
+    ast::{parse_expression, parse_item},
+    expect,
     lexer::{Token, TokenStream},
 };
 
-use super::{parse_block, Expression, Item};
+use super::{Expression, Item};
+
+#[derive(Debug, PartialEq)]
+pub struct While {
+    pub condition: Box<Expression>,
+    pub body: Block,
+}
 
 #[derive(Debug, PartialEq)]
 pub struct If {
     pub condition: Box<Expression>,
-    pub then: Vec<Item>,
+    pub then: Block,
     pub otherwise: Option<Else>,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Else {
-    Block(Vec<Item>),
+    Block(Block),
     If(Box<If>),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Block(pub Vec<Item>);
+
+impl IntoIterator for Block {
+    type Item = Item;
+    type IntoIter = std::vec::IntoIter<Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+pub fn parse_while(stream: &mut TokenStream) -> While {
+    let condition = Box::new(parse_expression(stream));
+    let body = parse_block(stream);
+
+    While { condition, body }
 }
 
 pub fn parse_if(stream: &mut TokenStream) -> If {
@@ -27,6 +56,7 @@ pub fn parse_if(stream: &mut TokenStream) -> If {
     } else {
         None
     };
+
     If {
         condition,
         then,
@@ -41,4 +71,24 @@ fn parse_else(stream: &mut TokenStream) -> Else {
     } else {
         Else::Block(parse_block(stream))
     }
+}
+
+pub fn parse_block(stream: &mut TokenStream) -> Block {
+    expect!(stream, Token::LBrace);
+    let mut block = Vec::new();
+    loop {
+        match stream.peek() {
+            Token::RBrace => {
+                stream.advance();
+                break;
+            }
+            _ => {
+                let Some(item) = parse_item(stream) else {
+                    panic!("Unclosed block");
+                };
+                block.push(item);
+            }
+        }
+    }
+    Block(block)
 }

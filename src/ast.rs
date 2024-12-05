@@ -1,6 +1,6 @@
 mod flow;
-use flow::parse_if;
-pub use flow::{Else, If};
+use flow::{parse_block, parse_if, parse_while};
+pub use flow::{Block, Else, If, While};
 use smol_str::SmolStr;
 
 use crate::lexer::{Token, TokenStream};
@@ -44,8 +44,9 @@ pub enum Expression {
     LitInt(i64),
     LitBool(bool),
     Identifier(SmolStr),
-    Function { body: Vec<Item> },
+    Function { body: Block },
     If(If),
+    While(While),
 }
 
 #[macro_export]
@@ -121,28 +122,12 @@ fn parse_expression(stream: &mut TokenStream) -> Expression {
             let if_expr = parse_if(stream);
             Expression::If(if_expr)
         }
+        Token::While => {
+            let while_expr = parse_while(stream);
+            Expression::While(while_expr)
+        }
         other => panic!("unexpected token {other:?}"),
     }
-}
-
-fn parse_block(stream: &mut TokenStream) -> Vec<Item> {
-    expect!(stream, Token::LBrace);
-    let mut block = Vec::new();
-    loop {
-        match stream.peek() {
-            Token::RBrace => {
-                stream.advance();
-                break;
-            }
-            _ => {
-                let Some(item) = parse_item(stream) else {
-                    panic!("Unclosed block");
-                };
-                block.push(item);
-            }
-        }
-    }
-    block
 }
 
 #[cfg(test)]
@@ -228,7 +213,7 @@ mod test {
                 name: "func".into(),
                 typename: Some("fn".into()),
                 value: Expression::Function {
-                    body: vec![Item::Print(Expression::LitInt(42))]
+                    body: Block(vec![Item::Print(Expression::LitInt(42))])
                 }
             }
         );

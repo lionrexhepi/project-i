@@ -5,11 +5,9 @@ use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
     let source = r#"let main = fn {
-            if true {
-                print 43
-            } else {
-                print 24
-            }
+        while true {
+            print 42
+        }
         }"#
     .chars()
     .collect();

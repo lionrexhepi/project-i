@@ -62,7 +62,15 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
                 write_item(*otherwise, to);
             }
         }
+        MangledItem::Loop { condition, body } => {
+            to.write_all(b"while (").unwrap();
+            write_item(*condition, to);
+            to.write_all(b")").unwrap();
+            write_item(MangledItem::Block(body), to);
+            
+        },
         MangledItem::Function { .. } => unreachable!(),
+        
     }
 }
 
