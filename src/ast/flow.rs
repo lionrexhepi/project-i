@@ -76,17 +76,24 @@ fn parse_else(stream: &mut TokenStream) -> Else {
 pub fn parse_block(stream: &mut TokenStream) -> Block {
     expect!(stream, Token::LBrace);
     let mut block = Vec::new();
+    let mut must_close = false;
     loop {
         match stream.peek() {
             Token::RBrace => {
                 stream.advance();
                 break;
             }
+            _ if must_close => panic!("Expected Semicolon or end of block"),
             _ => {
                 let Some(item) = parse_item(stream) else {
                     panic!("Unclosed block");
                 };
                 block.push(item);
+                if let Token::Semicolon = stream.peek() {
+                    stream.advance();
+                } else {
+                    must_close = true;
+                };
             }
         }
     }

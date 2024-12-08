@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::ir::{MangledItem, MangledProgram};
+use crate::ir::{MangledItem, MangledProgram, Operator};
 
 pub fn write_c(program: MangledProgram, to: &mut impl Write) {
     for item in program.items {
@@ -67,10 +67,32 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             write_item(*condition, to);
             to.write_all(b")").unwrap();
             write_item(MangledItem::Block(body), to);
-            
-        },
+        }
         MangledItem::Function { .. } => unreachable!(),
-        
+        MangledItem::Op { lhs, rhs, op } => {
+            let op = match op {
+                Operator::Add => "+",
+                Operator::Sub => "-",
+                Operator::Mul => "*",
+                Operator::Div => "/",
+                Operator::Eq => "==",
+                Operator::Neq => "!=",
+                Operator::Lt => "<",
+                Operator::Lte => "<=",
+                Operator::Gt => ">",
+                Operator::Gte => ">=",
+                Operator::And => "&&",
+                Operator::Or => "||",
+            };
+            write_item(*lhs, to);
+            to.write_all(op.as_bytes()).unwrap();
+            write_item(*rhs, to);
+        }
+        MangledItem::Assign { var, value } => {
+            write!(to, "{var} = ").unwrap();
+            write_item(*value, to);
+            to.write_all(b";").unwrap();
+        }
     }
 }
 

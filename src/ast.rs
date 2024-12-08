@@ -1,5 +1,7 @@
 mod binary;
 mod flow;
+use binary::parse_binary;
+pub use binary::{Binary, BinaryOp};
 use flow::{parse_block, parse_if, parse_while};
 pub use flow::{Block, Else, If, While};
 use smol_str::SmolStr;
@@ -48,6 +50,7 @@ pub enum Expression {
     Function { body: Block },
     If(If),
     While(While),
+    Binary(binary::Binary),
 }
 
 #[macro_export]
@@ -108,26 +111,29 @@ fn parse_item(stream: &mut TokenStream) -> Option<Item> {
         }
         _ => Item::Expression(parse_expression(stream)),
     };
+    
     Some(item)
 }
 
 fn parse_expression(stream: &mut TokenStream) -> Expression {
-    match stream.advance() {
-        Token::Integer(i) => Expression::LitInt(i),
-        Token::Boolean(b) => Expression::LitBool(b),
-        Token::Identifier(ident) => Expression::Identifier(ident),
-        Token::Fn => Expression::Function {
-            body: parse_block(stream),
-        },
+    match stream.peek() {
+        Token::Fn => {
+            stream.advance();
+            Expression::Function {
+                body: parse_block(stream),
+            }
+        }
         Token::If => {
+            stream.advance();
             let if_expr = parse_if(stream);
             Expression::If(if_expr)
         }
         Token::While => {
+            stream.advance();
             let while_expr = parse_while(stream);
             Expression::While(while_expr)
         }
-        other => panic!("unexpected token {other:?}"),
+        _ => parse_binary(stream),
     }
 }
 

@@ -26,6 +26,7 @@ pub enum Token {
     RBrace,
     // Operators
     Eq,
+    DoubleEq,
     Plus,
     Minus,
     Star,
@@ -118,7 +119,14 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                 ':' => Token::Colon,
                 '{' => Token::LBrace,
                 '}' => Token::RBrace,
-                '=' => Token::Eq,
+                '=' => {
+                    if source[index + 1] == '=' {
+                        index += 1;
+                        Token::DoubleEq
+                    } else {
+                        Token::Eq
+                    }
+                }
                 '+' => Token::Plus,
                 '-' => Token::Minus,
                 '*' => Token::Star,

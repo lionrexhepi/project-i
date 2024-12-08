@@ -1,4 +1,4 @@
-use crate::lexer::TokenStream;
+use crate::lexer::{Token, TokenStream};
 
 use super::Expression;
 
@@ -22,8 +22,155 @@ pub enum BinaryOp {
     Ge,
     And,
     Or,
+    Assign,
 }
 
-pub fn parse_binary(stream: TokenStream) -> Binary {
-    todo!()
+pub fn parse_binary(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    parse_assignment(stream)
+}
+
+fn parse_assignment(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    let left = parse_or(stream);
+    let op = match stream.peek() {
+        Token::Eq => {
+            stream.advance();
+            BinaryOp::Assign
+        }
+        _ => return left,
+    };
+    let right = parse_or(stream);
+
+    Expression::Binary(Binary {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+    })
+}
+
+fn parse_or(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    let mut left = parse_and(stream);
+    while let Token::Or = stream.peek() {
+        stream.advance();
+        let right = parse_and(stream);
+        left = Expression::Binary(Binary {
+            left: Box::new(left),
+            op: BinaryOp::Or,
+            right: Box::new(right),
+        });
+    }
+    left
+}
+
+fn parse_and(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    let mut left = parse_comparison(stream);
+    while let Token::And = stream.peek() {
+        stream.advance();
+        let right = parse_comparison(stream);
+        left = Expression::Binary(Binary {
+            left: Box::new(left),
+            op: BinaryOp::And,
+            right: Box::new(right),
+        });
+    }
+    left
+}
+
+fn parse_comparison(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    let mut left = parse_term(stream);
+    loop {
+        let op = match stream.peek() {
+            Token::Lt => BinaryOp::Lt,
+            Token::Gt => BinaryOp::Gt,
+            Token::DoubleEq => BinaryOp::Eq,
+            _ => break,
+        };
+        stream.advance();
+        let right = parse_term(stream);
+        left = Expression::Binary(Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        });
+    }
+    left
+}
+
+fn parse_term(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    let mut left = parse_factor(stream);
+    loop {
+        let op = match stream.peek() {
+            Token::Plus => BinaryOp::Add,
+            Token::Minus => BinaryOp::Sub,
+            _ => break,
+        };
+        stream.advance();
+        let right = parse_factor(stream);
+        left = Expression::Binary(Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        });
+    }
+    left
+}
+
+fn parse_factor(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    let mut left = parse_unary(stream);
+    loop {
+        let op = match stream.peek() {
+            Token::Star => BinaryOp::Mul,
+            Token::Slash => BinaryOp::Div,
+            _ => break,
+        };
+        stream.advance();
+        let right = parse_unary(stream);
+        left = Expression::Binary(Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        });
+    }
+    left
+}
+
+fn parse_unary(stream: &mut TokenStream) -> Expression {
+    dbg!(&stream);
+    match stream.advance() {
+        Token::Integer(i) => Expression::LitInt(i),
+        Token::Boolean(b) => Expression::LitBool(b),
+        Token::Identifier(ident) => Expression::Identifier(ident),
+        other => panic!("unexpected token {other:?}"),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::lexer::lex;
+
+    #[test]
+    fn test_parse_binary() {
+        let source = "1 + 2 * 3";
+        let mut stream = lex(source.chars().collect());
+        let expr = parse_binary(&mut stream);
+        assert_eq!(
+            expr,
+            Expression::Binary(Binary {
+                left: Box::new(Expression::LitInt(1)),
+                op: BinaryOp::Add,
+                right: Box::new(Expression::Binary(Binary {
+                    left: Box::new(Expression::LitInt(2)),
+                    op: BinaryOp::Mul,
+                    right: Box::new(Expression::LitInt(3)),
+                })),
+            })
+        );
+    }
 }

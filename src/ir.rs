@@ -3,7 +3,7 @@ pub mod symbols;
 use smol_str::SmolStr;
 use symbols::{Symbol, SymbolTable, Type};
 
-use crate::ast::{Ast, Block, Else, Expression, If, Item, While};
+use crate::ast::{Ast, BinaryOp, Block, Else, Expression, If, Item, While};
 
 pub struct MangledProgram {
     pub items: Vec<MangledItem>,
@@ -45,6 +45,31 @@ pub enum MangledItem {
         body: Vec<MangledItem>,
     },
     Block(Vec<MangledItem>),
+    Assign {
+        var: SmolStr,
+        value: Box<MangledItem>,
+    },
+    Op {
+        lhs: Box<MangledItem>,
+        rhs: Box<MangledItem>,
+        op: Operator,
+    },
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Operator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Neq,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    And,
+    Or,
 }
 
 pub fn mangle(ast: Ast) -> MangledProgram {
@@ -108,6 +133,20 @@ fn infer_type(expr: &Expression, symbols: &SymbolTable) -> Type {
         Expression::Function { body: _ } => Type::Function,
         Expression::If(_) => todo!(),
         Expression::While(_) => todo!(),
+        Expression::Binary(binary) => {
+            let left_ty = infer_type(&binary.left, symbols);
+            let right_ty = infer_type(&binary.right, symbols);
+
+            assert_eq!(left_ty, right_ty);
+
+            match binary.op {
+                BinaryOp::Eq | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
+                    Type::Bool
+                }
+                BinaryOp::Assign => unreachable!(),
+                _ => left_ty,
+            }
+        }
     }
 }
 
@@ -135,6 +174,83 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
             let body = mangle_block(body, symbols);
 
             MangledItem::Loop { condition, body }
+        }
+        Expression::Binary(assignment) if assignment.op == BinaryOp::Assign => {
+            let Expression::Identifier(variable) = *assignment.left else {
+                panic!("Cannot assign to a value")
+            };
+
+            let Some(Symbol::Variable(ty)) = symbols.get(&variable) else {
+                panic!("Undeclared variable")
+            };
+
+            if infer_type(&assignment.right, symbols) != *ty {
+                panic!("Invalid type")
+            }
+
+            let rhs = mangle_expression(*assignment.right, symbols);
+
+            MangledItem::Assign {
+                var: variable,
+                value: Box::new(rhs),
+            }
+        }
+        Expression::Binary(binary) => {
+            let lhs_ty = infer_type(&binary.left, symbols);
+            let rhs_ty = infer_type(&binary.right, symbols);
+
+            let op = match binary.op {
+                BinaryOp::Add => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Add
+                }
+                BinaryOp::Sub => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Sub
+                }
+                BinaryOp::Mul => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Mul
+                }
+                BinaryOp::Div => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Div
+                }
+                BinaryOp::Eq => {
+                    assert!(lhs_ty == rhs_ty);
+                    Operator::Eq
+                }
+                BinaryOp::Lt => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Lt
+                }
+                BinaryOp::Gt => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Gt
+                }
+                BinaryOp::Le => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Lte
+                }
+                BinaryOp::Ge => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    Operator::Gte
+                }
+                BinaryOp::And => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Bool);
+                    Operator::And
+                }
+                BinaryOp::Or => {
+                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Bool);
+                    Operator::Or
+                }
+                BinaryOp::Assign => unreachable!(),
+            };
+            MangledItem::Op {
+                lhs: Box::new(mangle_expression(*binary.left, symbols)),
+                rhs: Box::new(mangle_expression(*binary.right, symbols)),
+                op,
+            }
         }
     }
 }

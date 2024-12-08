@@ -1,0 +1,16 @@
+let main = fn {
+    let a = 0;
+    while a < 100 {
+        a = a + 2;
+        print a
+    }
+}
+
+int main() {
+    int a = 0;
+    while (a < 100) {
+        a = a + 2;
+        printf("%ld", a);
+    }
+    return 0;
+}

@@ -5,8 +5,10 @@ use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
     let source = r#"let main = fn {
-        while true {
-            print 42
+        let a = 0;
+        while a < 100 {
+            a = a + 2;
+            print a
         }
         }"#
     .chars()
