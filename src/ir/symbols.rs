@@ -12,7 +12,7 @@ pub struct SymbolTable {
 impl Default for SymbolTable {
     fn default() -> Self {
         let mut symbols = HashMap::new();
-        symbols.insert("int".into(), Symbol::Type(TypeId::INT));
+        symbols.insert("i32".into(), Symbol::Type(TypeId::INT));
         symbols.insert("bool".into(), Symbol::Type(TypeId::BOOL));
         SymbolTable {
             symbols,

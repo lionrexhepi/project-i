@@ -5,7 +5,7 @@ use project_i::{ast::parse, ir::mangle, lexer::lex};
 
 fn main() {
     let source = r#"let main = fn {
-        let a: int = 0;
+        let a: i32 = 0;
         while a < 100 {
             a = a + 2;
             print a

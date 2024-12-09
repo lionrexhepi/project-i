@@ -81,7 +81,7 @@ pub fn lex(source: Vec<char>) -> TokenStream {
             loop {
                 let c = source.get(index).copied();
                 match c {
-                    Some(letter) if letter.is_ascii_alphabetic() => {
+                    Some(letter) if letter.is_ascii_alphanumeric() => {
                         ident.push(letter);
                         index += 1;
                     }
