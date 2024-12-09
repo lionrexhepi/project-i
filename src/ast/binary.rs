@@ -26,12 +26,10 @@ pub enum BinaryOp {
 }
 
 pub fn parse_binary(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     parse_assignment(stream)
 }
 
 fn parse_assignment(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     let left = parse_or(stream);
     let op = match stream.peek() {
         Token::Eq => {
@@ -50,7 +48,6 @@ fn parse_assignment(stream: &mut TokenStream) -> Expression {
 }
 
 fn parse_or(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     let mut left = parse_and(stream);
     while let Token::Or = stream.peek() {
         stream.advance();
@@ -65,7 +62,6 @@ fn parse_or(stream: &mut TokenStream) -> Expression {
 }
 
 fn parse_and(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     let mut left = parse_comparison(stream);
     while let Token::And = stream.peek() {
         stream.advance();
@@ -80,7 +76,6 @@ fn parse_and(stream: &mut TokenStream) -> Expression {
 }
 
 fn parse_comparison(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     let mut left = parse_term(stream);
     loop {
         let op = match stream.peek() {
@@ -101,7 +96,6 @@ fn parse_comparison(stream: &mut TokenStream) -> Expression {
 }
 
 fn parse_term(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     let mut left = parse_factor(stream);
     loop {
         let op = match stream.peek() {
@@ -121,7 +115,6 @@ fn parse_term(stream: &mut TokenStream) -> Expression {
 }
 
 fn parse_factor(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     let mut left = parse_unary(stream);
     loop {
         let op = match stream.peek() {
@@ -141,7 +134,6 @@ fn parse_factor(stream: &mut TokenStream) -> Expression {
 }
 
 fn parse_unary(stream: &mut TokenStream) -> Expression {
-    dbg!(&stream);
     match stream.advance() {
         Token::Integer(i) => Expression::LitInt(i),
         Token::Boolean(b) => Expression::LitBool(b),
