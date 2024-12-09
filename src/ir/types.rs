@@ -7,7 +7,13 @@ impl Default for TypeMap {
         let mut map = TypeMap::new();
         map.insert(TypeId::INT, Type::Int);
         map.insert(TypeId::BOOL, Type::Bool);
-        map.insert(TypeId::FUNCTION, Type::Function);
+        map.insert(
+            TypeId::FUNCTION,
+            Type::Function {
+                args: vec![],
+                ret: TypeId::VOID,
+            },
+        );
         map
     }
 }
@@ -40,7 +46,7 @@ impl TypeId {
 pub enum Type {
     Int,
     Bool,
-    Function,
+    Function { args: Vec<TypeId>, ret: TypeId },
 }
 
 impl Type {
@@ -48,7 +54,7 @@ impl Type {
         match self {
             Type::Int => "int",
             Type::Bool => "bool",
-            Type::Function => "###FUNCTION###", // To make GCC error if this gets into the generated C code
+            Type::Function { args: _, ret: _ } => "###FUNCTION###", // To make GCC error if this gets into the generated C code
         }
     }
 }
