@@ -1,7 +1,9 @@
 pub mod symbols;
+mod types;
 
 use smol_str::SmolStr;
-use symbols::{Symbol, SymbolTable, Type};
+use symbols::{Symbol, SymbolTable};
+use types::TypeId;
 
 use crate::ast::{Ast, BinaryOp, Block, Else, Expression, If, Item, While};
 
@@ -112,8 +114,11 @@ fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
             }
 
             symbols.insert(&name, Symbol::Variable(expr_ty));
+
+            let typename = symbols.resolve_type(expr_ty).name();
+
             vec![MangledItem::Declaration {
-                typename: expr_ty.name().into(),
+                typename: typename.into(),
                 var: name,
                 value: Box::new(mangle_expression(value, symbols)),
             }]
@@ -122,15 +127,15 @@ fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
     }
 }
 
-fn infer_type(expr: &Expression, symbols: &SymbolTable) -> Type {
+fn infer_type(expr: &Expression, symbols: &SymbolTable) -> TypeId {
     match expr {
-        Expression::LitInt(_) => Type::Int,
-        Expression::LitBool(_) => Type::Bool,
+        Expression::LitInt(_) => TypeId::INT,
+        Expression::LitBool(_) => TypeId::BOOL,
         Expression::Identifier(name) => match symbols.get(name) {
             Some(Symbol::Variable(ty)) => *ty,
             _ => panic!("undeclared variable: {}", name),
         },
-        Expression::Function { body: _ } => Type::Function,
+        Expression::Function { body: _ } => TypeId::FUNCTION,
         Expression::If(_) => todo!(),
         Expression::While(_) => todo!(),
         Expression::Binary(binary) => {
@@ -141,7 +146,7 @@ fn infer_type(expr: &Expression, symbols: &SymbolTable) -> Type {
 
             match binary.op {
                 BinaryOp::Eq | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                    Type::Bool
+                    TypeId::BOOL
                 }
                 BinaryOp::Assign => unreachable!(),
                 _ => left_ty,
@@ -165,7 +170,7 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
         },
         Expression::If(r#if) => mangle_if(r#if, symbols),
         Expression::While(While { condition, body }) => {
-            if infer_type(&condition, symbols) != Type::Bool {
+            if infer_type(&condition, symbols) != TypeId::BOOL {
                 panic!("expected boolean expression")
             }
 
@@ -201,19 +206,19 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
 
             let op = match binary.op {
                 BinaryOp::Add => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Add
                 }
                 BinaryOp::Sub => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Sub
                 }
                 BinaryOp::Mul => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Mul
                 }
                 BinaryOp::Div => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Div
                 }
                 BinaryOp::Eq => {
@@ -221,27 +226,27 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
                     Operator::Eq
                 }
                 BinaryOp::Lt => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Lt
                 }
                 BinaryOp::Gt => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Gt
                 }
                 BinaryOp::Le => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Lte
                 }
                 BinaryOp::Ge => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Int);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::INT);
                     Operator::Gte
                 }
                 BinaryOp::And => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Bool);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::BOOL);
                     Operator::And
                 }
                 BinaryOp::Or => {
-                    assert!(lhs_ty == rhs_ty && lhs_ty == Type::Bool);
+                    assert!(lhs_ty == rhs_ty && lhs_ty == TypeId::BOOL);
                     Operator::Or
                 }
                 BinaryOp::Assign => unreachable!(),
@@ -256,7 +261,7 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
 }
 
 fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
-    if infer_type(&r#if.condition, symbols) != Type::Bool {
+    if infer_type(&r#if.condition, symbols) != TypeId::BOOL {
         panic!("expected boolean expression")
     }
 
@@ -321,10 +326,7 @@ mod test {
                 value: Box::new(MangledItem::LitInt(42))
             }
         );
-        assert_eq!(
-            symbols.get("foo"),
-            Some(&Symbol::Variable(symbols::Type::Int))
-        )
+        assert_eq!(symbols.get("foo"), Some(&Symbol::Variable(TypeId::INT)))
     }
 
     #[test]
