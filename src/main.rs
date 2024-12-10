@@ -7,7 +7,7 @@ fn main() {
     let source = r#"let main = fn {
         let a: i32 = 0;
         while a < 100 {
-            a = add2(a);
+            a = a + 2;
             print a
         }
         }"#

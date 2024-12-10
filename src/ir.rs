@@ -29,7 +29,7 @@ pub enum MangledItem {
     Declaration {
         typename: SmolStr,
         var: SmolStr,
-        value: Box<MangledItem>,
+        value: Option<Box<MangledItem>>,
     },
     LitInt(i64),
     LitBool(bool),
@@ -70,10 +70,21 @@ pub struct MangledBlock {
 
 impl IntoIterator for MangledBlock {
     type Item = MangledItem;
-    type IntoIter = std::vec::IntoIter<MangledItem>;
-
+    // the full beauty of rust
+    type IntoIter =
+        std::iter::Chain<std::vec::IntoIter<MangledItem>, std::vec::IntoIter<MangledItem>>;
     fn into_iter(self) -> Self::IntoIter {
-        self.statements.into_iter()
+        let tmp_results = self
+            .tmp_results
+            .into_iter()
+            .map(|(name, ty)| MangledItem::Declaration {
+                typename: ty,
+                var: name,
+                value: None,
+            })
+            .collect::<Vec<_>>();
+
+        tmp_results.into_iter().chain(self.statements)
     }
 }
 
@@ -139,7 +150,7 @@ fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
             vec![MangledItem::Declaration {
                 typename: typename.into(),
                 var: name,
-                value: Box::new(mangle_expression(value, symbols)),
+                value: Some(Box::new(mangle_expression(value, symbols))),
             }]
         }
         Item::Expression(expr) => vec![mangle_expression(expr, symbols)],
@@ -335,12 +346,22 @@ fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
 }
 
 fn mangle_block(block: Block, symbols: &mut SymbolTable) -> MangledBlock {
+    symbols.push_scope();
     let statements = block
         .into_iter()
         .flat_map(|item| mangle_item(item, symbols))
         .collect();
+
+    let tmp_results = symbols
+        .pop_scope()
+        .map(|(id, ty)| {
+            let name = id.get_name();
+            let ty = symbols.resolve_type(ty).name().into();
+            (name, ty)
+        })
+        .collect();
     MangledBlock {
-        tmp_results: vec![],
+        tmp_results,
         statements,
     }
 }
@@ -377,7 +398,7 @@ mod test {
             MangledItem::Declaration {
                 typename: "int".into(),
                 var: "foo".into(),
-                value: Box::new(MangledItem::LitInt(42))
+                value: Some(Box::new(MangledItem::LitInt(42)))
             }
         );
         assert_eq!(symbols.get("foo"), Some(&Symbol::Variable(TypeId::INT)))

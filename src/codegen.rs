@@ -18,7 +18,7 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
         MangledItem::Declaration {
             typename: _,
             var,
-            value,
+            value: Some(value),
         } if matches!(&*value, MangledItem::Function { .. }) => {
             let MangledItem::Function { body } = *value else {
                 unreachable!()
@@ -34,8 +34,11 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             var,
             value,
         } => {
-            write!(to, "{} {} = ", ty, var).unwrap();
-            write_item(*value, to);
+            write!(to, "{} {}", ty, var).unwrap();
+            if let Some(value) = value {
+                to.write_all(b" = ").unwrap();
+                write_item(*value, to);
+            }
             to.write_all(b";").unwrap();
         }
         MangledItem::LitInt(i) => write!(to, "{}", i).unwrap(),
@@ -135,7 +138,7 @@ mod test {
         let program = MangledProgram::from([MangledItem::Declaration {
             typename: "int".into(),
             var: "foo".into(),
-            value: Box::new(MangledItem::LitInt(42)),
+            value: Some(Box::new(MangledItem::LitInt(42))),
         }]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);
