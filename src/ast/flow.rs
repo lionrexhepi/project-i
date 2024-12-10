@@ -29,14 +29,17 @@ pub enum Else {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Block(pub Vec<Item>);
+pub struct Block {
+    pub statements: Vec<Item>,
+    pub semicolon_terminated: bool,
+}
 
 impl IntoIterator for Block {
     type Item = Item;
     type IntoIter = std::vec::IntoIter<Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.statements.into_iter()
     }
 }
 
@@ -77,11 +80,12 @@ pub fn parse_block(stream: &mut TokenStream) -> Block {
     expect!(stream, Token::LBrace);
     let mut block = Vec::new();
     let mut must_close = false;
-    loop {
+    let semicolon_terminated = loop {
         match stream.peek() {
             Token::RBrace => {
                 stream.advance();
-                break;
+                // If the last statement read a semicolon afterwards, must_close will be false.
+                break !must_close;
             }
             _ if must_close => panic!("Expected Semicolon or end of block"),
             _ => {
@@ -96,6 +100,9 @@ pub fn parse_block(stream: &mut TokenStream) -> Block {
                 };
             }
         }
+    };
+    Block {
+        statements: block,
+        semicolon_terminated,
     }
-    Block(block)
 }

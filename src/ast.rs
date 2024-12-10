@@ -221,7 +221,10 @@ mod test {
                 name: "func".into(),
                 typename: Some("fn".into()),
                 value: Expression::Function {
-                    body: Block(vec![Item::Print(Expression::LitInt(42))])
+                    body: Block {
+                        statements: vec![Item::Print(Expression::LitInt(42))],
+                        semicolon_terminated: false
+                    }
                 }
             }
         );

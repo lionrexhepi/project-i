@@ -1,6 +1,8 @@
+mod inference;
 pub mod symbols;
 mod types;
 
+use inference::infer_expr_type;
 use smol_str::SmolStr;
 use symbols::{Symbol, SymbolTable};
 use types::{Type, TypeId};
@@ -132,7 +134,7 @@ fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
                 None => None,
             };
 
-            let expr_ty = infer_type(&value, symbols);
+            let expr_ty = infer_expr_type(&value, symbols);
 
             if let Some(named_type) = named_type {
                 if named_type != expr_ty {
@@ -157,43 +159,6 @@ fn mangle_item(item: Item, symbols: &mut SymbolTable) -> Vec<MangledItem> {
     }
 }
 
-fn infer_type(expr: &Expression, symbols: &SymbolTable) -> TypeId {
-    match expr {
-        Expression::LitInt(_) => TypeId::INT,
-        Expression::LitBool(_) => TypeId::BOOL,
-        Expression::Identifier(name) => match symbols.get(name) {
-            Some(Symbol::Variable(ty)) => *ty,
-            _ => panic!("undeclared variable: {}", name),
-        },
-        Expression::Function { body: _ } => TypeId::FUNCTION,
-        Expression::If(_) => todo!(),
-        Expression::While(_) => todo!(),
-        Expression::Binary(binary) => {
-            let left_ty = infer_type(&binary.left, symbols);
-            let right_ty = infer_type(&binary.right, symbols);
-
-            assert_eq!(left_ty, right_ty);
-
-            match binary.op {
-                BinaryOp::Eq | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                    TypeId::BOOL
-                }
-                BinaryOp::Assign => unreachable!(),
-                _ => left_ty,
-            }
-        }
-        Expression::Call(name, _) => {
-            let Some(Symbol::Variable(id)) = symbols.get(name) else {
-                panic!("undeclared function")
-            };
-            let Type::Function { ret: ty, .. } = symbols.resolve_type(*id) else {
-                panic!("expected function")
-            };
-            *ty
-        }
-    }
-}
-
 fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem {
     match expr {
         Expression::LitInt(int) => MangledItem::LitInt(int),
@@ -209,7 +174,7 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
         },
         Expression::If(r#if) => mangle_if(r#if, symbols),
         Expression::While(While { condition, body }) => {
-            if infer_type(&condition, symbols) != TypeId::BOOL {
+            if infer_expr_type(&condition, symbols) != TypeId::BOOL {
                 panic!("expected boolean expression")
             }
 
@@ -228,7 +193,7 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
                 panic!("Undeclared variable")
             };
 
-            if infer_type(&assignment.right, symbols) != *ty {
+            if infer_expr_type(&assignment.right, symbols) != *ty {
                 panic!("Invalid type")
             }
 
@@ -240,8 +205,8 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
             }
         }
         Expression::Binary(binary) => {
-            let lhs_ty = infer_type(&binary.left, symbols);
-            let rhs_ty = infer_type(&binary.right, symbols);
+            let lhs_ty = infer_expr_type(&binary.left, symbols);
+            let rhs_ty = infer_expr_type(&binary.right, symbols);
 
             let op = match binary.op {
                 BinaryOp::Add => {
@@ -311,7 +276,7 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
                 .into_iter()
                 .zip(expected)
                 .map(|(expr, expected_ty)| {
-                    if infer_type(&expr, symbols) != expected_ty {
+                    if infer_expr_type(&expr, symbols) != expected_ty {
                         panic!("type mismatch")
                     }
                     mangle_expression(expr, symbols)
@@ -323,7 +288,7 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
 }
 
 fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
-    if infer_type(&r#if.condition, symbols) != TypeId::BOOL {
+    if infer_expr_type(&r#if.condition, symbols) != TypeId::BOOL {
         panic!("expected boolean expression")
     }
 
