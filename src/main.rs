@@ -1,7 +1,7 @@
 use core::str;
 use std::io::Write;
 
-use project_i::{ast::parse, ir::mangle, lexer::lex};
+use project_i::{ast::parse, ir::analyse, lexer::lex};
 
 fn main() {
     let source = r#"let main = fn {
@@ -15,7 +15,7 @@ fn main() {
     .collect();
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
-    let ir = mangle(ast);
+    let ir = analyse(ast);
     let mut buf = Vec::from(b"#include <stdio.h>\nint add2(int a){return a+2;}\n");
     project_i::codegen::write_c(ir, &mut buf);
     println!("{}", str::from_utf8(&buf).unwrap());

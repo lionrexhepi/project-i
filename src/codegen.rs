@@ -1,26 +1,26 @@
 use std::io::Write;
 
-use crate::ir::{MangledItem, MangledProgram, Operator};
+use crate::ir::{Ir, IrItem, Operator};
 
-pub fn write_c(program: MangledProgram, to: &mut impl Write) {
+pub fn write_c(program: Ir, to: &mut impl Write) {
     for item in program.items {
         write_item(item, to);
     }
 }
 
-fn write_item(item: MangledItem, to: &mut impl Write) {
+fn write_item(item: IrItem, to: &mut impl Write) {
     match item {
-        MangledItem::Print(expr) => {
+        IrItem::Print(expr) => {
             to.write_all(b"printf(\"%ld\\n\", ").unwrap();
             write_item(*expr, to);
             to.write_all(b");").unwrap();
         }
-        MangledItem::Declaration {
+        IrItem::Declaration {
             typename: _,
             var,
             value: Some(value),
-        } if matches!(&*value, MangledItem::Function { .. }) => {
-            let MangledItem::Function { body } = *value else {
+        } if matches!(&*value, IrItem::Function { .. }) => {
+            let IrItem::Function { body } = *value else {
                 unreachable!()
             };
             write!(to, "int {}(){{", var).unwrap();
@@ -29,7 +29,7 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             }
             to.write_all(b"return 0;}").unwrap();
         }
-        MangledItem::Declaration {
+        IrItem::Declaration {
             typename: ty,
             var,
             value,
@@ -41,17 +41,17 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             }
             to.write_all(b";").unwrap();
         }
-        MangledItem::LitInt(i) => write!(to, "{}", i).unwrap(),
-        MangledItem::LitBool(b) => write!(to, "{}", b as u8).unwrap(),
-        MangledItem::Variable(smol_str) => write!(to, "{}", smol_str).unwrap(),
-        MangledItem::Block(block) => {
+        IrItem::LitInt(i) => write!(to, "{}", i).unwrap(),
+        IrItem::LitBool(b) => write!(to, "{}", b as u8).unwrap(),
+        IrItem::Variable(smol_str) => write!(to, "{}", smol_str).unwrap(),
+        IrItem::Block(block) => {
             to.write_all(b"{").unwrap();
             for item in block {
                 write_item(item, to);
             }
             to.write_all(b"}").unwrap();
         }
-        MangledItem::If {
+        IrItem::If {
             condition,
             then,
             otherwise,
@@ -59,20 +59,20 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             to.write_all(b"if (").unwrap();
             write_item(*condition, to);
             to.write_all(b")").unwrap();
-            write_item(MangledItem::Block(then), to);
+            write_item(IrItem::Block(then), to);
             if let Some(otherwise) = otherwise {
                 to.write_all(b"else").unwrap();
                 write_item(*otherwise, to);
             }
         }
-        MangledItem::Loop { condition, body } => {
+        IrItem::Loop { condition, body } => {
             to.write_all(b"while (").unwrap();
             write_item(*condition, to);
             to.write_all(b")").unwrap();
-            write_item(MangledItem::Block(body), to);
+            write_item(IrItem::Block(body), to);
         }
-        MangledItem::Function { .. } => unreachable!(),
-        MangledItem::Op { lhs, rhs, op } => {
+        IrItem::Function { .. } => unreachable!(),
+        IrItem::Op { lhs, rhs, op } => {
             let op = match op {
                 Operator::Add => "+",
                 Operator::Sub => "-",
@@ -91,12 +91,12 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             to.write_all(op.as_bytes()).unwrap();
             write_item(*rhs, to);
         }
-        MangledItem::Assign { var, value } => {
+        IrItem::Assign { var, value } => {
             write!(to, "{var} = ").unwrap();
             write_item(*value, to);
             to.write_all(b";").unwrap();
         }
-        MangledItem::Call { name, args } => {
+        IrItem::Call { name, args } => {
             write!(to, "{}(", name).unwrap();
             let len = args.len();
             for (i, arg) in args.into_iter().enumerate() {
@@ -118,7 +118,7 @@ mod test {
 
     #[test]
     fn test_print_int() {
-        let program = MangledProgram::from([MangledItem::Print(Box::new(MangledItem::LitInt(42)))]);
+        let program = Ir::from([IrItem::Print(Box::new(IrItem::LitInt(42)))]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);
         assert_eq!(buf, b"printf(\"%ld\\n\", 42);");
@@ -126,8 +126,7 @@ mod test {
 
     #[test]
     fn test_print_bool() {
-        let program =
-            MangledProgram::from([MangledItem::Print(Box::new(MangledItem::LitBool(true)))]);
+        let program = Ir::from([IrItem::Print(Box::new(IrItem::LitBool(true)))]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);
         assert_eq!(str::from_utf8(&buf).unwrap(), "printf(\"%ld\\n\", 1);");
@@ -135,10 +134,10 @@ mod test {
 
     #[test]
     fn test_declare_int() {
-        let program = MangledProgram::from([MangledItem::Declaration {
+        let program = Ir::from([IrItem::Declaration {
             typename: "int".into(),
             var: "foo".into(),
-            value: Some(Box::new(MangledItem::LitInt(42))),
+            value: Some(Box::new(IrItem::LitInt(42))),
         }]);
         let mut buf = Vec::new();
         write_c(program, &mut buf);
