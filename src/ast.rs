@@ -47,6 +47,7 @@ pub enum Expression {
     LitInt(i64),
     LitBool(bool),
     Identifier(SmolStr),
+    Call(SmolStr, Vec<Expression>),
     Function { body: Block },
     If(If),
     While(While),
@@ -111,7 +112,7 @@ fn parse_item(stream: &mut TokenStream) -> Option<Item> {
         }
         _ => Item::Expression(parse_expression(stream)),
     };
-    
+
     Some(item)
 }
 

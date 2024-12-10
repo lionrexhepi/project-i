@@ -3,7 +3,7 @@ mod types;
 
 use smol_str::SmolStr;
 use symbols::{Symbol, SymbolTable};
-use types::TypeId;
+use types::{Type, TypeId};
 
 use crate::ast::{Ast, BinaryOp, Block, Else, Expression, If, Item, While};
 
@@ -55,6 +55,10 @@ pub enum MangledItem {
         lhs: Box<MangledItem>,
         rhs: Box<MangledItem>,
         op: Operator,
+    },
+    Call {
+        name: SmolStr,
+        args: Vec<MangledItem>,
     },
 }
 
@@ -151,6 +155,15 @@ fn infer_type(expr: &Expression, symbols: &SymbolTable) -> TypeId {
                 BinaryOp::Assign => unreachable!(),
                 _ => left_ty,
             }
+        }
+        Expression::Call(name, _) => {
+            let Some(Symbol::Variable(id)) = symbols.get(name) else {
+                panic!("undeclared function")
+            };
+            let Type::Function { ret: ty, .. } = symbols.resolve_type(*id) else {
+                panic!("expected function")
+            };
+            *ty
         }
     }
 }
@@ -256,6 +269,29 @@ fn mangle_expression(expr: Expression, symbols: &mut SymbolTable) -> MangledItem
                 rhs: Box::new(mangle_expression(*binary.right, symbols)),
                 op,
             }
+        }
+        Expression::Call(name, args) => {
+            let Some(Symbol::Variable(id)) = symbols.get(&name) else {
+                panic!("undeclared function")
+            };
+            let expected = {
+                let Type::Function { args, .. } = symbols.resolve_type(*id) else {
+                    panic!("expected function")
+                };
+                args.clone() // TODO figure out a way to do this without a clone
+            };
+
+            let args = args
+                .into_iter()
+                .zip(expected)
+                .map(|(expr, expected_ty)| {
+                    if infer_type(&expr, symbols) != expected_ty {
+                        panic!("type mismatch")
+                    }
+                    mangle_expression(expr, symbols)
+                })
+                .collect();
+            MangledItem::Call { name, args }
         }
     }
 }

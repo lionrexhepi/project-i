@@ -7,7 +7,7 @@ fn main() {
     let source = r#"let main = fn {
         let a: i32 = 0;
         while a < 100 {
-            a = a + 2;
+            a = add2(a);
             print a
         }
         }"#
@@ -16,7 +16,7 @@ fn main() {
     let mut tokens = lex(source);
     let ast = parse(&mut tokens);
     let ir = mangle(ast);
-    let mut buf = Vec::new();
+    let mut buf = Vec::from(b"#include <stdio.h>\nint add2(int a){return a+2;}\n");
     project_i::codegen::write_c(ir, &mut buf);
     println!("{}", str::from_utf8(&buf).unwrap());
     let mut gcc = std::process::Command::new("gcc")

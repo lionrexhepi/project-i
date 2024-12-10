@@ -93,6 +93,17 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
             write_item(*value, to);
             to.write_all(b";").unwrap();
         }
+        MangledItem::Call { name, args } => {
+            write!(to, "{}(", name).unwrap();
+            let len = args.len();
+            for (i, arg) in args.into_iter().enumerate() {
+                write_item(arg, to);
+                if i < len - 1 {
+                    to.write_all(b", ").unwrap();
+                }
+            }
+            to.write_all(b");").unwrap();
+        }
     }
 }
 

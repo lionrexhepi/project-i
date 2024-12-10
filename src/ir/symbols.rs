@@ -12,12 +12,15 @@ pub struct SymbolTable {
 impl Default for SymbolTable {
     fn default() -> Self {
         let mut symbols = HashMap::new();
+        let mut types = TypeMap::default();
+        let add2 = types.push(Type::Function {
+            args: vec![TypeId::INT],
+            ret: TypeId::INT,
+        });
         symbols.insert("i32".into(), Symbol::Type(TypeId::INT));
         symbols.insert("bool".into(), Symbol::Type(TypeId::BOOL));
-        SymbolTable {
-            symbols,
-            types: TypeMap::default(),
-        }
+        symbols.insert("add2".into(), Symbol::Variable(add2));
+        SymbolTable { symbols, types }
     }
 }
 

@@ -1,34 +1,28 @@
-use std::collections::HashMap;
-
-pub struct TypeMap(HashMap<TypeId, Type>);
+pub struct TypeMap(Vec<Type>);
 
 impl Default for TypeMap {
     fn default() -> Self {
-        let mut map = TypeMap::new();
-        map.insert(TypeId::INT, Type::Int);
-        map.insert(TypeId::BOOL, Type::Bool);
-        map.insert(
-            TypeId::FUNCTION,
+        TypeMap(vec![
+            Type::Unit,
+            Type::Int,
+            Type::Bool,
             Type::Function {
                 args: vec![],
                 ret: TypeId::VOID,
             },
-        );
-        map
+        ])
     }
 }
 
 impl TypeMap {
-    fn new() -> Self {
-        TypeMap(HashMap::new())
-    }
-
-    pub fn insert(&mut self, id: TypeId, ty: Type) {
-        self.0.insert(id, ty);
+    pub fn push(&mut self, ty: Type) -> TypeId {
+        let id = TypeId(self.0.len());
+        self.0.push(ty);
+        id
     }
 
     pub fn get(&self, id: TypeId) -> Option<&Type> {
-        self.0.get(&id)
+        self.0.get(id.0)
     }
 }
 
@@ -44,6 +38,7 @@ impl TypeId {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Type {
+    Unit,
     Int,
     Bool,
     Function { args: Vec<TypeId>, ret: TypeId },
@@ -52,6 +47,7 @@ pub enum Type {
 impl Type {
     pub fn name(&self) -> &str {
         match self {
+            Type::Unit => "void",
             Type::Int => "int",
             Type::Bool => "bool",
             Type::Function { args: _, ret: _ } => "###FUNCTION###", // To make GCC error if this gets into the generated C code

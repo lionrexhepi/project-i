@@ -137,7 +137,25 @@ fn parse_unary(stream: &mut TokenStream) -> Expression {
     match stream.advance() {
         Token::Integer(i) => Expression::LitInt(i),
         Token::Boolean(b) => Expression::LitBool(b),
-        Token::Identifier(ident) => Expression::Identifier(ident),
+        Token::Identifier(ident) => {
+            if let Token::LParen = stream.peek() {
+                stream.advance();
+                let mut args = Vec::new();
+                loop {
+                    if let Token::RParen = stream.peek() {
+                        stream.advance();
+                        break;
+                    }
+                    args.push(parse_binary(stream));
+                    if let Token::Comma = stream.peek() {
+                        stream.advance();
+                    }
+                }
+                Expression::Call(ident, args)
+            } else {
+                Expression::Identifier(ident)
+            }
+        }
         other => panic!("unexpected token {other:?}"),
     }
 }
