@@ -35,18 +35,18 @@ pub enum MangledItem {
     LitBool(bool),
     Variable(SmolStr),
     Function {
-        body: Vec<MangledItem>,
+        body: MangledBlock,
     },
     If {
         condition: Box<MangledItem>,
-        then: Vec<MangledItem>,
+        then: MangledBlock,
         otherwise: Option<Box<MangledItem>>,
     },
     Loop {
         condition: Box<MangledItem>,
-        body: Vec<MangledItem>,
+        body: MangledBlock,
     },
-    Block(Vec<MangledItem>),
+    Block(MangledBlock),
     Assign {
         var: SmolStr,
         value: Box<MangledItem>,
@@ -60,6 +60,21 @@ pub enum MangledItem {
         name: SmolStr,
         args: Vec<MangledItem>,
     },
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MangledBlock {
+    tmp_results: Vec<(SmolStr, SmolStr)>,
+    statements: Vec<MangledItem>,
+}
+
+impl IntoIterator for MangledBlock {
+    type Item = MangledItem;
+    type IntoIter = std::vec::IntoIter<MangledItem>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.statements.into_iter()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -312,7 +327,6 @@ fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
             Else::If(r#if) => mangle_if(*r#if, symbols),
         })
         .map(Box::new);
-
     MangledItem::If {
         condition,
         then,
@@ -320,11 +334,15 @@ fn mangle_if(r#if: If, symbols: &mut SymbolTable) -> MangledItem {
     }
 }
 
-fn mangle_block(block: Block, symbols: &mut SymbolTable) -> Vec<MangledItem> {
-    block
+fn mangle_block(block: Block, symbols: &mut SymbolTable) -> MangledBlock {
+    let statements = block
         .into_iter()
         .flat_map(|item| mangle_item(item, symbols))
-        .collect()
+        .collect();
+    MangledBlock {
+        tmp_results: vec![],
+        statements,
+    }
 }
 
 #[cfg(test)]
@@ -347,7 +365,7 @@ mod test {
         let mut symbols = SymbolTable::default();
         let declaration = Item::Declaration {
             name: "foo".into(),
-            typename: Some("int".into()),
+            typename: Some("i32".into()),
             value: Expression::LitInt(42),
         };
 
