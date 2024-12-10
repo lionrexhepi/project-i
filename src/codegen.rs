@@ -102,7 +102,7 @@ fn write_item(item: MangledItem, to: &mut impl Write) {
                     to.write_all(b", ").unwrap();
                 }
             }
-            to.write_all(b");").unwrap();
+            to.write_all(b")").unwrap();
         }
     }
 }
