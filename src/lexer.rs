@@ -1,8 +1,9 @@
 use std::collections::VecDeque;
 
 use smol_str::{SmolStr, SmolStrBuilder};
+use snafu::Snafu;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     // Literals
     Integer(i64),
@@ -64,7 +65,7 @@ impl TokenStream {
     }
 }
 
-pub fn lex(source: Vec<char>) -> TokenStream {
+pub fn lex(source: Vec<char>) -> Result<TokenStream> {
     let mut stream = TokenStream::new();
     let mut index = 0;
     loop {
@@ -135,12 +136,12 @@ pub fn lex(source: Vec<char>) -> TokenStream {
                 '<' => Token::Lt,
                 '|' => Token::Or,
                 '&' => Token::And,
-                other => panic!("unexpected character: {}", other),
+                other => return Err(Error::UnexpectedCharacter { token: other }),
             });
         }
     }
 
-    stream
+    Ok(stream)
 }
 
 fn special_ident(ident: SmolStr) -> Token {
@@ -169,6 +170,16 @@ where
     }
 }
 
+#[derive(Snafu, Debug)]
+pub enum Error {
+    #[snafu(display("Invalid character: {}", token))]
+    UnexpectedCharacter { token: char },
+    #[snafu(display("Invalid number literal. Only base 10 ASCII digits are supported."))]
+    InvalidNumberLiteral,
+}
+
+type Result<T> = std::result::Result<T, Error>;
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -176,21 +187,21 @@ mod test {
     #[test]
     fn test_number() {
         let source = "print 42";
-        let stream = lex(source.chars().collect());
+        let stream = lex(source.chars().collect()).unwrap();
         assert_eq!(stream.inner, vec![Token::Print, Token::Integer(42)]);
     }
 
     #[test]
     fn test_bool() {
         let source = "print true";
-        let stream = lex(source.chars().collect());
+        let stream = lex(source.chars().collect()).unwrap();
         assert_eq!(stream.inner, vec![Token::Print, Token::Boolean(true)]);
     }
 
     #[test]
     fn test_identifier() {
         let source = "print foo";
-        let stream = lex(source.chars().collect());
+        let stream = lex(source.chars().collect()).unwrap();
         assert_eq!(
             stream.inner,
             vec![Token::Print, Token::Identifier("foo".into())]
@@ -200,7 +211,7 @@ mod test {
     #[test]
     fn test_let() {
         let source = "let x = 42";
-        let stream = lex(source.chars().collect());
+        let stream = lex(source.chars().collect()).unwrap();
         assert_eq!(
             stream.inner,
             vec![

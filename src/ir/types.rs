@@ -46,14 +46,21 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn name(&self) -> &str {
+    pub fn c_name(&self) -> &str {
         match self {
             Type::Unit => "void",
             Type::Int => "int",
             Type::Bool => "bool",
-            Type::Function { args: _, ret: _ } => {
-                panic!("Don't call name on function pointer types")
-            }
+            Type::Function { .. } => "#!!!!!SENTINEL_GCC_ERRORTHIS!!!!#",
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Type::Unit => "unit",
+            Type::Int => "int",
+            Type::Bool => "bool",
+            Type::Function { .. } => "function",
         }
     }
 }

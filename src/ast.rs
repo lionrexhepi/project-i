@@ -5,6 +5,7 @@ pub use binary::{Binary, BinaryOp};
 use flow::{parse_block, parse_if, parse_while};
 pub use flow::{Block, Else, If, While};
 use smol_str::SmolStr;
+use snafu::Snafu;
 
 use crate::lexer::{Token, TokenStream};
 
@@ -66,50 +67,57 @@ pub enum Expression {
 
 #[macro_export]
 macro_rules! expect {
-    ( $stream:ident, $pat:pat) => {
-        let $pat = $stream.advance() else {
-            panic!("unexpected token")
+    ($stream:ident, $pat:pat, $expected:expr) => {
+        let $pat = (match $stream.peek() {
+            #[allow(unused_variables)]
+            $pat => $stream.advance(),
+            other => Err(Error::UnexpectedToken {
+                expected: $expected,
+                found: other.clone(),
+            })?,
+        }) else {
+            unreachable!()
         };
     };
 }
 
-pub fn parse(stream: &mut TokenStream) -> Ast {
+pub fn parse(stream: &mut TokenStream) -> Result<Ast> {
     let mut items = Vec::new();
-    while let Some(item) = parse_item(stream) {
+    while let Some(item) = parse_item(stream)? {
         items.push(item);
 
         let (Token::Semicolon | Token::Eof) = stream.advance() else {
             panic!("Expected semicolon to terminate statement")
         };
     }
-    Ast { items }
+    Ok(Ast { items })
 }
 
-fn parse_item(stream: &mut TokenStream) -> Option<Item> {
+fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
     let item = match stream.peek() {
-        Token::Eof => return None,
+        Token::Eof => return Ok(None),
         Token::Print => {
             stream.advance();
-            let expression = parse_expression(stream);
+            let expression = parse_expression(stream)?;
             Item::Print(expression)
         }
         Token::Let => {
             stream.advance();
-            expect!(stream, Token::Identifier(name));
+            expect!(stream, Token::Identifier(name), "identifier");
 
             let typename = match stream.peek() {
                 Token::Colon => {
                     stream.advance();
-                    expect!(stream, Token::Identifier(ident));
+                    expect!(stream, Token::Identifier(ident), "identifier");
                     Some(ident)
                 }
                 Token::Eq => None,
                 _ => panic!("unexpected token"),
             };
 
-            expect!(stream, Token::Eq);
+            expect!(stream, Token::Eq, "an assignment");
 
-            let value = parse_expression(stream);
+            let value = parse_expression(stream)?;
 
             Item::Declaration {
                 name,
@@ -117,33 +125,44 @@ fn parse_item(stream: &mut TokenStream) -> Option<Item> {
                 value,
             }
         }
-        _ => Item::Expression(parse_expression(stream)),
+        _ => Item::Expression(parse_expression(stream)?),
     };
 
-    Some(item)
+    Ok(Some(item))
 }
 
-fn parse_expression(stream: &mut TokenStream) -> Expression {
+fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
     match stream.peek() {
         Token::Fn => {
             stream.advance();
-            Expression::Function {
-                body: parse_block(stream),
-            }
+            Ok(Expression::Function {
+                body: parse_block(stream)?,
+            })
         }
         Token::If => {
             stream.advance();
-            let if_expr = parse_if(stream);
-            Expression::If(if_expr)
+            let if_expr = parse_if(stream)?;
+            Ok(Expression::If(if_expr))
         }
         Token::While => {
             stream.advance();
-            let while_expr = parse_while(stream);
-            Expression::While(while_expr)
+            let while_expr = parse_while(stream)?;
+            Ok(Expression::While(while_expr))
         }
-        _ => parse_binary(stream),
+        _ => Ok(parse_binary(stream)?),
     }
 }
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("unexpected token: expected {}, found {:?}", expected, found))]
+    UnexpectedToken {
+        expected: &'static str,
+        found: Token,
+    },
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod test {
@@ -152,7 +171,7 @@ mod test {
     #[test]
     fn test_print_int() {
         let mut stream = TokenStream::from([Token::Print, Token::Integer(42)]);
-        let items = parse(&mut stream);
+        let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert!(matches!(
             items.items[0],
@@ -163,7 +182,7 @@ mod test {
     #[test]
     fn test_print_bool() {
         let mut stream = TokenStream::from([Token::Print, Token::Boolean(true)]);
-        let items = parse(&mut stream);
+        let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert!(matches!(
             items.items[0],
@@ -174,7 +193,7 @@ mod test {
     #[test]
     fn test_print_identifier() {
         let mut stream = TokenStream::from([Token::Print, Token::Identifier("foo".into())]);
-        let items = parse(&mut stream);
+        let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert_eq!(
             items.items[0],
@@ -193,7 +212,7 @@ mod test {
             Eq,
             Integer(42),
         ]);
-        let items = parse(&mut stream);
+        let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert_eq!(
             items.items[0],
@@ -220,7 +239,7 @@ mod test {
             Integer(42),
             RBrace,
         ]);
-        let items = parse(&mut stream);
+        let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert_eq!(
             items.items[0],

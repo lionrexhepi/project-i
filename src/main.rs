@@ -13,9 +13,9 @@ fn main() {
         }"#
     .chars()
     .collect();
-    let mut tokens = lex(source);
-    let ast = parse(&mut tokens);
-    let ir = transform(ast);
+    let mut tokens = lex(source).unwrap();
+    let ast = parse(&mut tokens).unwrap();
+    let ir = transform(ast).unwrap();
     let mut buf = Vec::from(b"#include <stdio.h>\nint add2(int a){return a+2;}\n");
     project_i::codegen::write_c(ir, &mut buf);
     println!("{}", str::from_utf8(&buf).unwrap());

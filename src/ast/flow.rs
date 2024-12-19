@@ -7,7 +7,7 @@ use crate::{
     lexer::{Token, TokenStream},
 };
 
-use super::{Expression, Item};
+use super::{Error, Expression, Item, Result};
 
 #[derive(Debug, PartialEq)]
 pub struct While {
@@ -43,41 +43,41 @@ impl IntoIterator for Block {
     }
 }
 
-pub fn parse_while(stream: &mut TokenStream) -> While {
-    let condition = Box::new(parse_expression(stream));
-    let body = parse_block(stream);
+pub fn parse_while(stream: &mut TokenStream) -> Result<While> {
+    let condition = Box::new(parse_expression(stream)?);
+    let body = parse_block(stream)?;
 
-    While { condition, body }
+    Ok(While { condition, body })
 }
 
-pub fn parse_if(stream: &mut TokenStream) -> If {
-    let condition = Box::new(parse_expression(stream));
-    let then = parse_block(stream);
+pub fn parse_if(stream: &mut TokenStream) -> Result<If> {
+    let condition = Box::new(parse_expression(stream)?);
+    let then = parse_block(stream)?;
     let otherwise = if let Token::Else = stream.peek() {
         stream.advance();
-        Some(parse_else(stream))
+        Some(parse_else(stream)?)
     } else {
         None
     };
 
-    If {
+    Ok(If {
         condition,
         then,
         otherwise,
-    }
+    })
 }
 
-fn parse_else(stream: &mut TokenStream) -> Else {
+fn parse_else(stream: &mut TokenStream) -> Result<Else> {
     if let Token::If = stream.peek() {
         stream.advance();
-        Else::If(Box::new(parse_if(stream)))
+        Ok(Else::If(Box::new(parse_if(stream)?)))
     } else {
-        Else::Block(parse_block(stream))
+        Ok(Else::Block(parse_block(stream)?))
     }
 }
 
-pub fn parse_block(stream: &mut TokenStream) -> Block {
-    expect!(stream, Token::LBrace);
+pub fn parse_block(stream: &mut TokenStream) -> Result<Block> {
+    expect!(stream, Token::LBrace, "An opening brace");
     let mut block = Vec::new();
     let mut must_close = false;
     let semicolon_terminated = loop {
@@ -89,7 +89,7 @@ pub fn parse_block(stream: &mut TokenStream) -> Block {
             }
             _ if must_close => panic!("Expected Semicolon or end of block"),
             _ => {
-                let Some(item) = parse_item(stream) else {
+                let Some(item) = parse_item(stream)? else {
                     panic!("Unclosed block");
                 };
                 block.push(item);
@@ -101,8 +101,8 @@ pub fn parse_block(stream: &mut TokenStream) -> Block {
             }
         }
     };
-    Block {
+    Ok(Block {
         statements: block,
         semicolon_terminated,
-    }
+    })
 }

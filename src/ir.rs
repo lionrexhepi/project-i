@@ -1,6 +1,7 @@
 pub mod symbols;
 mod transform;
 mod types;
+use snafu::Snafu;
 pub use transform::transform;
 
 use smol_str::SmolStr;
@@ -124,3 +125,19 @@ impl From<ast::BinaryOp> for Operator {
         }
     }
 }
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Type mismatch: expected {}, found {}", expected, found))]
+    TypeMismatch { expected: SmolStr, found: SmolStr },
+    #[snafu(display("Variable not found: {}", var))]
+    UndeclaredVariable { var: SmolStr },
+    #[snafu(display("Function not found: {}", name))]
+    FunctionNotFound { name: SmolStr },
+    #[snafu(display("Undeclared type: {}", name))]
+    UndeclaredType { name: SmolStr },
+    #[snafu(display("Not a function: {}", name))]
+    NotAFunction { name: SmolStr },
+}
+
+pub type Result<T> = std::result::Result<T, Error>;

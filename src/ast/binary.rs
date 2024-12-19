@@ -1,6 +1,9 @@
-use crate::lexer::{Token, TokenStream};
+use crate::{
+    expect,
+    lexer::{Token, TokenStream},
+};
 
-use super::Expression;
+use super::{Error, Expression, Result};
 
 #[derive(Debug, PartialEq)]
 pub struct Binary {
@@ -24,57 +27,59 @@ pub enum BinaryOp {
     Or,
 }
 
-pub fn parse_binary(stream: &mut TokenStream) -> Expression {
+pub fn parse_binary(stream: &mut TokenStream) -> Result<Expression> {
     parse_assignment(stream)
 }
 
-fn parse_assignment(stream: &mut TokenStream) -> Expression {
-    let left = parse_or(stream);
+fn parse_assignment(stream: &mut TokenStream) -> Result<Expression> {
+    let left = parse_or(stream)?;
     let Token::Eq = stream.peek() else {
-        return left;
+        return Ok(left);
     };
-    let right = parse_or(stream);
+    let right = parse_or(stream)?;
 
-    let Expression::Identifier(left) = left else {
-        panic!("expected identifier on left side of assignment")
-    };
+    expect!(
+        stream,
+        Token::Identifier(left),
+        "a variable as an assign target"
+    );
 
-    Expression::Assign {
+    Ok(Expression::Assign {
         var: left,
         value: Box::new(right),
-    }
+    })
 }
 
-fn parse_or(stream: &mut TokenStream) -> Expression {
-    let mut left = parse_and(stream);
+fn parse_or(stream: &mut TokenStream) -> Result<Expression> {
+    let mut left = parse_and(stream)?;
     while let Token::Or = stream.peek() {
         stream.advance();
-        let right = parse_and(stream);
+        let right = parse_and(stream)?;
         left = Expression::Binary(Binary {
             left: Box::new(left),
             op: BinaryOp::Or,
             right: Box::new(right),
         });
     }
-    left
+    Ok(left)
 }
 
-fn parse_and(stream: &mut TokenStream) -> Expression {
-    let mut left = parse_comparison(stream);
+fn parse_and(stream: &mut TokenStream) -> Result<Expression> {
+    let mut left = parse_comparison(stream)?;
     while let Token::And = stream.peek() {
         stream.advance();
-        let right = parse_comparison(stream);
+        let right = parse_comparison(stream)?;
         left = Expression::Binary(Binary {
             left: Box::new(left),
             op: BinaryOp::And,
             right: Box::new(right),
         });
     }
-    left
+    Ok(left)
 }
 
-fn parse_comparison(stream: &mut TokenStream) -> Expression {
-    let mut left = parse_term(stream);
+fn parse_comparison(stream: &mut TokenStream) -> Result<Expression> {
+    let mut left = parse_term(stream)?;
     loop {
         let op = match stream.peek() {
             Token::Lt => BinaryOp::Lt,
@@ -83,18 +88,18 @@ fn parse_comparison(stream: &mut TokenStream) -> Expression {
             _ => break,
         };
         stream.advance();
-        let right = parse_term(stream);
+        let right = parse_term(stream)?;
         left = Expression::Binary(Binary {
             left: Box::new(left),
             op,
             right: Box::new(right),
         });
     }
-    left
+    Ok(left)
 }
 
-fn parse_term(stream: &mut TokenStream) -> Expression {
-    let mut left = parse_factor(stream);
+fn parse_term(stream: &mut TokenStream) -> Result<Expression> {
+    let mut left = parse_factor(stream)?;
     loop {
         let op = match stream.peek() {
             Token::Plus => BinaryOp::Add,
@@ -102,18 +107,18 @@ fn parse_term(stream: &mut TokenStream) -> Expression {
             _ => break,
         };
         stream.advance();
-        let right = parse_factor(stream);
+        let right = parse_factor(stream)?;
         left = Expression::Binary(Binary {
             left: Box::new(left),
             op,
             right: Box::new(right),
         });
     }
-    left
+    Ok(left)
 }
 
-fn parse_factor(stream: &mut TokenStream) -> Expression {
-    let mut left = parse_unary(stream);
+fn parse_factor(stream: &mut TokenStream) -> Result<Expression> {
+    let mut left = parse_unary(stream)?;
     loop {
         let op = match stream.peek() {
             Token::Star => BinaryOp::Mul,
@@ -121,20 +126,20 @@ fn parse_factor(stream: &mut TokenStream) -> Expression {
             _ => break,
         };
         stream.advance();
-        let right = parse_unary(stream);
+        let right = parse_unary(stream)?;
         left = Expression::Binary(Binary {
             left: Box::new(left),
             op,
             right: Box::new(right),
         });
     }
-    left
+    Ok(left)
 }
 
-fn parse_unary(stream: &mut TokenStream) -> Expression {
+fn parse_unary(stream: &mut TokenStream) -> Result<Expression> {
     match stream.advance() {
-        Token::Integer(i) => Expression::LitInt(i),
-        Token::Boolean(b) => Expression::LitBool(b),
+        Token::Integer(i) => Ok(Expression::LitInt(i)),
+        Token::Boolean(b) => Ok(Expression::LitBool(b)),
         Token::Identifier(ident) => {
             if let Token::LParen = stream.peek() {
                 stream.advance();
@@ -144,17 +149,20 @@ fn parse_unary(stream: &mut TokenStream) -> Expression {
                         stream.advance();
                         break;
                     }
-                    args.push(parse_binary(stream));
+                    args.push(parse_binary(stream)?);
                     if let Token::Comma = stream.peek() {
                         stream.advance();
                     }
                 }
-                Expression::Call(ident, args)
+                Ok(Expression::Call(ident, args))
             } else {
-                Expression::Identifier(ident)
+                Ok(Expression::Identifier(ident))
             }
         }
-        other => panic!("unexpected token {other:?}"),
+        other => Err(Error::UnexpectedToken {
+            expected: "Literal or identifier",
+            found: other,
+        }),
     }
 }
 
@@ -166,8 +174,8 @@ mod test {
     #[test]
     fn test_parse_binary() {
         let source = "1 + 2 * 3";
-        let mut stream = lex(source.chars().collect());
-        let expr = parse_binary(&mut stream);
+        let mut stream = lex(source.chars().collect()).unwrap();
+        let expr = parse_binary(&mut stream).unwrap();
         assert_eq!(
             expr,
             Expression::Binary(Binary {

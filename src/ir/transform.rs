@@ -4,28 +4,39 @@ use crate::ast::{Ast, BinaryOp, Block, Else, Expression, If, Item, While};
 use super::{
     symbols::{Symbol, SymbolTable, TempId},
     types::{Type, TypeId},
-    Ir, IrBlock, IrItem,
+    Error, Ir, IrBlock, IrItem, Result,
 };
 
 type AnnotatedItem = (IrItem, TypeId);
 type AnnotatedBlock = (IrBlock, TypeId);
 
-pub fn transform(ast: Ast) -> Ir {
+macro_rules! assert_types {
+    ($symbol_table:ident, $ty1:expr,$ty2:expr) => {
+        if $ty1 != $ty2 {
+            return Err(Error::TypeMismatch {
+                expected: $symbol_table.resolve_type($ty1).name().into(),
+                found: $symbol_table.resolve_type($ty2).name().into(),
+            });
+        }
+    };
+}
+
+pub fn transform(ast: Ast) -> Result<Ir> {
     let mut symbols = SymbolTable::default();
     let mut items = Vec::with_capacity(ast.items().len());
 
     for item in ast.into_iter() {
-        let (item, _) = transform_statement(item, &mut symbols);
+        let (item, _) = transform_statement(item, &mut symbols)?;
         items.push(item);
     }
-    Ir { items }
+    Ok(Ir { items })
 }
 
-fn transform_statement(item: Item, symbols: &mut SymbolTable) -> AnnotatedItem {
+fn transform_statement(item: Item, symbols: &mut SymbolTable) -> Result<AnnotatedItem> {
     let mut prepend = vec![];
     let (item, ty) = match item {
         Item::Print(expr) => {
-            let (expr, _) = transform_expression(expr, symbols, &mut prepend);
+            let (expr, _) = transform_expression(expr, symbols, &mut prepend)?;
 
             (IrItem::Print(Box::new(expr)), TypeId::VOID)
         }
@@ -37,20 +48,20 @@ fn transform_statement(item: Item, symbols: &mut SymbolTable) -> AnnotatedItem {
             let named_type = match typename {
                 Some(typename) => match symbols.get(&typename) {
                     Some(Symbol::Type(ty)) => Some(*ty),
-                    _ => panic!("undeclared type: {}", typename),
+                    _ => return Err(Error::UndeclaredType { name: typename }),
                 },
                 None => None,
             };
 
-            let (value, expr_ty) = transform_expression(value, symbols, &mut prepend);
+            let (value, expr_ty) = transform_expression(value, symbols, &mut prepend)?;
 
             if let Some(named_ty) = named_type {
-                assert_eq!(named_ty, expr_ty);
+                assert_types!(symbols, named_ty, expr_ty);
             }
 
             symbols.insert(&name, Symbol::Variable(expr_ty));
 
-            let typename = symbols.resolve_type(expr_ty).name().into();
+            let typename = symbols.resolve_type(expr_ty).c_name().into();
 
             (
                 IrItem::Declaration {
@@ -61,114 +72,114 @@ fn transform_statement(item: Item, symbols: &mut SymbolTable) -> AnnotatedItem {
                 TypeId::VOID,
             )
         }
-        Item::Expression(expr) => transform_expression(expr, symbols, &mut prepend),
+        Item::Expression(expr) => transform_expression(expr, symbols, &mut prepend)?,
     };
     prepend.push(item);
-    (IrItem::Multiple(prepend), ty)
+    Ok((IrItem::Multiple(prepend), ty))
 }
 
 fn transform_expression(
     expr: Expression,
     symbols: &mut SymbolTable,
     prepend: &mut Vec<IrItem>,
-) -> AnnotatedItem {
+) -> Result<AnnotatedItem> {
     match expr {
-        Expression::LitInt(int) => (IrItem::LitInt(int), TypeId::INT),
-        Expression::LitBool(bool) => (IrItem::LitBool(bool), TypeId::BOOL),
+        Expression::LitInt(int) => Ok((IrItem::LitInt(int), TypeId::INT)),
+        Expression::LitBool(bool) => Ok((IrItem::LitBool(bool), TypeId::BOOL)),
         Expression::Identifier(name) => {
             let Some(Symbol::Variable(ty)) = symbols.get(&name) else {
-                panic!("undeclared variable: {}", name)
+                return Err(Error::UndeclaredVariable { var: name });
             };
-            (IrItem::Variable(name), *ty)
+            Ok((IrItem::Variable(name), *ty))
         }
         Expression::Function { body } => {
-            let (body, _) = transform_block(body, symbols, None);
-            (IrItem::Function { body }, TypeId::FUNCTION)
+            let (body, _) = transform_block(body, symbols, None)?;
+            Ok((IrItem::Function { body }, TypeId::FUNCTION))
         }
         Expression::If(r#if) => transform_if(r#if, symbols, prepend, None),
         Expression::While(While { condition, body }) => {
-            let (condition, cond_ty) = transform_expression(*condition, symbols, prepend);
+            let (condition, cond_ty) = transform_expression(*condition, symbols, prepend)?;
 
-            assert_eq!(cond_ty, TypeId::BOOL);
+            assert_types!(symbols, cond_ty, TypeId::BOOL);
 
-            let (body, _) = transform_block(body, symbols, None);
+            let (body, _) = transform_block(body, symbols, None)?;
 
-            (
+            Ok((
                 IrItem::Loop {
                     condition: Box::new(condition),
                     body,
                 },
                 TypeId::VOID,
-            )
+            ))
         }
         Expression::Assign { var, value } => {
-            let (rhs, rhs_ty) = transform_expression(*value, symbols, prepend);
+            let (rhs, rhs_ty) = transform_expression(*value, symbols, prepend)?;
 
             let Some(Symbol::Variable(ty)) = symbols.get(&var) else {
-                panic!("Undeclared variable")
+                return Err(Error::UndeclaredVariable { var });
             };
 
-            assert_eq!(rhs_ty, *ty);
+            assert_types!(symbols, rhs_ty, *ty);
 
-            (
+            Ok((
                 IrItem::Assign {
                     var,
                     value: Box::new(rhs),
                 },
                 TypeId::VOID,
-            )
+            ))
         }
         Expression::Binary(binary) => {
-            let (lhs, lhs_ty) = transform_expression(*binary.left, symbols, prepend);
-            let (rhs, rhs_ty) = transform_expression(*binary.right, symbols, prepend);
+            let (lhs, lhs_ty) = transform_expression(*binary.left, symbols, prepend)?;
+            let (rhs, rhs_ty) = transform_expression(*binary.right, symbols, prepend)?;
 
             let out = match binary.op {
                 BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
-                    assert_eq!(lhs_ty, TypeId::INT);
-                    assert_eq!(rhs_ty, TypeId::INT);
+                    assert_types!(symbols, lhs_ty, TypeId::INT);
+                    assert_types!(symbols, rhs_ty, TypeId::INT);
                     TypeId::INT
                 }
                 BinaryOp::Eq | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                    assert_eq!(lhs_ty, rhs_ty);
+                    assert_types!(symbols, lhs_ty, rhs_ty);
                     TypeId::BOOL
                 }
                 BinaryOp::And | BinaryOp::Or => {
-                    assert_eq!(lhs_ty, TypeId::BOOL);
-                    assert_eq!(rhs_ty, TypeId::BOOL);
+                    assert_types!(symbols, lhs_ty, TypeId::BOOL);
+                    assert_types!(symbols, rhs_ty, TypeId::BOOL);
                     TypeId::BOOL
                 }
             };
-            (
+            Ok((
                 IrItem::Op {
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                     op: binary.op.into(),
                 },
                 out,
-            )
+            ))
         }
         Expression::Call(name, args) => {
             let Some(Symbol::Variable(id)) = symbols.get(&name) else {
-                panic!("undeclared function")
+                return Err(Error::UndeclaredVariable { var: name });
             };
             let Type::Function {
                 args: expected,
                 ret,
             } = symbols.resolve_type(*id).clone()
             else {
-                panic!("expected function")
+                return Err(Error::FunctionNotFound { name });
             };
 
             let args = args
                 .into_iter()
                 .zip(expected)
                 .map(|(expr, expected_ty)| {
-                    let (expr, ty) = transform_expression(expr, symbols, prepend);
-                    assert_eq!(ty, expected_ty);
-                    expr
+                    let (expr, ty) = transform_expression(expr, symbols, prepend)?;
+                    assert_types!(symbols, ty, expected_ty);
+                    Ok(expr)
                 })
-                .collect();
-            (IrItem::Call { name, args }, ret)
+                .collect::<Result<Vec<_>>>()?;
+            Ok((IrItem::Call { name, args }, ret))
         }
     }
 }
@@ -178,34 +189,31 @@ fn transform_if(
     symbols: &mut SymbolTable,
     prepend: &mut Vec<IrItem>,
     save_to: Option<TempId>,
-) -> AnnotatedItem {
-    let (condition, cond_ty) = transform_expression(*r#if.condition, symbols, prepend);
+) -> Result<AnnotatedItem> {
+    let (condition, cond_ty) = transform_expression(*r#if.condition, symbols, prepend)?;
 
-    assert_eq!(cond_ty, TypeId::BOOL);
+    assert_types!(symbols, cond_ty, TypeId::BOOL);
 
     let temp = save_to.unwrap_or_else(|| symbols.create_temporary());
 
-    let (then, then_ty) = transform_block(r#if.then, symbols, Some(temp));
+    let (then, then_ty) = transform_block(r#if.then, symbols, Some(temp))?;
 
     let otherwise = r#if
         .otherwise
         .map(|expr| match expr {
             Else::Block(block) => {
-                let (mut block, ty) = transform_block(block, symbols, Some(temp));
+                let (mut block, ty) = transform_block(block, symbols, Some(temp))?;
                 block.return_var = Some(temp.get_name());
-                (IrItem::Block(block), ty)
+                Ok((IrItem::Block(block), ty))
             }
             Else::If(r#if) => transform_if(*r#if, symbols, prepend, Some(temp)),
         })
+        .transpose()?
         .map(|(item, otherwise_ty)| {
-            if then_ty != otherwise_ty {
-                panic!(
-                    "type mismatch: expected {:?}, got {:?}",
-                    then_ty, otherwise_ty
-                )
-            }
-            Box::new(item)
-        });
+            assert_types!(symbols, then_ty, otherwise_ty);
+            Ok(Box::new(item))
+        })
+        .transpose()?;
 
     let r#if = IrItem::If {
         condition: Box::new(condition),
@@ -214,9 +222,9 @@ fn transform_if(
     };
     if then_ty != TypeId::VOID {
         prepend.push(r#if);
-        (IrItem::Variable(temp.get_name()), then_ty)
+        Ok((IrItem::Variable(temp.get_name()), then_ty))
     } else {
-        (r#if, then_ty)
+        Ok((r#if, then_ty))
     }
 }
 
@@ -224,13 +232,13 @@ fn transform_block(
     block: Block,
     symbols: &mut SymbolTable,
     save_to: Option<TempId>,
-) -> AnnotatedBlock {
+) -> Result<AnnotatedBlock> {
     symbols.push_scope();
     let len = block.statements.len();
     let mut statements = Vec::with_capacity(if save_to.is_some() { len + 1 } else { len });
     let mut ty = TypeId::VOID;
     for (i, item) in block.statements.into_iter().enumerate() {
-        let (statement, statement_ty) = transform_statement(item, symbols);
+        let (statement, statement_ty) = transform_statement(item, symbols)?;
 
         if i == len - 1 {
             if let Some(temp) = save_to {
@@ -249,21 +257,21 @@ fn transform_block(
     let tmp_decls = symbols
         .pop_scope()
         .into_iter()
-        .map(|(id, ty)| (id.get_name(), symbols.resolve_type(ty).name().into()))
+        .map(|(id, ty)| (id.get_name(), symbols.resolve_type(ty).c_name().into()))
         .collect();
 
     if let Some(save_to) = save_to {
         symbols.set_temporary_type(save_to, ty);
     }
 
-    (
+    Ok((
         IrBlock {
             temporaries: tmp_decls,
             statements,
             return_var: save_to.map(|id| id.get_name()),
         },
         ty,
-    )
+    ))
 }
 
 #[cfg(test)]
@@ -275,7 +283,7 @@ mod test {
     #[test]
     fn test_mangle() {
         let ast = Ast::from([Item::Print(Expression::LitInt(42))]);
-        let program = transform(ast);
+        let program = transform(ast).unwrap();
         assert_eq!(program.items.len(), 1);
         assert_eq!(
             program.items[0],
@@ -292,7 +300,7 @@ mod test {
             value: Expression::LitInt(42),
         };
 
-        let transformed = transform_statement(declaration, &mut symbols);
+        let transformed = transform_statement(declaration, &mut symbols).unwrap();
 
         assert_eq!(
             transformed.0,
@@ -310,6 +318,6 @@ mod test {
     fn test_undeclared() {
         let mut symbols = SymbolTable::default();
         let expression = Expression::Identifier("foo".into());
-        transform_expression(expression, &mut symbols, &mut vec![]);
+        transform_expression(expression, &mut symbols, &mut vec![]).unwrap();
     }
 }
