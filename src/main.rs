@@ -1,7 +1,11 @@
 use core::str;
 use std::io::Write;
 
-use project_i::{ast::parse, ir::transform, lexer::lex};
+use project_i::{
+    ast::parse,
+    ir::transform,
+    lexer::{lex, InMemoryFile},
+};
 
 fn main() {
     let source = r#"let main = fn {
@@ -12,7 +16,7 @@ fn main() {
         print a;
         }"#
     .chars()
-    .collect();
+    .collect::<InMemoryFile>();
     let mut tokens = lex(source).unwrap();
     let ast = parse(&mut tokens).unwrap();
     let ir = transform(ast).unwrap();

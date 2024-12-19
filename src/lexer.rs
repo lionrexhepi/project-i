@@ -3,6 +3,8 @@ use std::collections::VecDeque;
 use smol_str::{SmolStr, SmolStrBuilder};
 use snafu::Snafu;
 
+use crate::errors::SourceLocation;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     // Literals
@@ -65,26 +67,26 @@ impl TokenStream {
     }
 }
 
-pub fn lex(source: Vec<char>) -> Result<TokenStream> {
+pub fn lex(mut source: impl File) -> Result<TokenStream> {
     let mut stream = TokenStream::new();
-    let mut index = 0;
+
     loop {
-        let Some(c) = source.get(index).copied() else {
+        let Some(c) = source.peek() else {
             break;
         };
 
         if c.is_ascii_whitespace() {
-            index += 1;
+            source.advance();
         } else if c.is_ascii_alphabetic() {
             let mut ident = SmolStrBuilder::new();
             ident.push(c);
-            index += 1;
+            source.advance();
             loop {
-                let c = source.get(index).copied();
+                let c = source.peek();
                 match c {
                     Some(letter) if letter.is_ascii_alphanumeric() => {
                         ident.push(letter);
-                        index += 1;
+                        source.advance();
                     }
                     _ => {
                         let ident = ident.finish();
@@ -96,13 +98,13 @@ pub fn lex(source: Vec<char>) -> Result<TokenStream> {
             continue;
         } else if c.is_ascii_digit() {
             let mut lit = c.to_digit(10).unwrap() as i64;
-            index += 1;
+            source.advance();
             loop {
-                let c = source.get(index).copied();
+                let c = source.peek();
                 match c {
                     Some(digit) if digit.is_ascii_digit() => {
                         lit = lit * 10 + digit.to_digit(10).unwrap() as i64;
-                        index += 1;
+                        source.advance();
                     }
                     _ => {
                         stream.push(Token::Integer(lit));
@@ -111,7 +113,7 @@ pub fn lex(source: Vec<char>) -> Result<TokenStream> {
                 }
             }
         } else {
-            index += 1;
+            source.advance();
             stream.push(match c {
                 ',' => Token::Comma,
                 ';' => Token::Semicolon,
@@ -121,8 +123,8 @@ pub fn lex(source: Vec<char>) -> Result<TokenStream> {
                 '{' => Token::LBrace,
                 '}' => Token::RBrace,
                 '=' => {
-                    if source[index + 1] == '=' {
-                        index += 1;
+                    if let Some('=') = source.peek_n(1) {
+                        source.advance();
                         Token::DoubleEq
                     } else {
                         Token::Eq
@@ -170,6 +172,57 @@ where
     }
 }
 
+pub trait File {
+    /// File name for error reporting.
+    fn name(&self) -> &str;
+
+    fn advance(&mut self) -> Option<char>;
+    fn peek(&self) -> Option<char>;
+    fn peek_n(&self, n: usize) -> Option<char>;
+
+    fn location(&self) -> SourceLocation;
+}
+
+pub struct InMemoryFile {
+    name: String,
+    data: VecDeque<char>,
+}
+
+impl File for InMemoryFile {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn advance(&mut self) -> Option<char> {
+        self.data.remove(0)
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.data.front().copied()
+    }
+
+    fn peek_n(&self, n: usize) -> Option<char> {
+        self.data.get(n).copied()
+    }
+
+    fn location(&self) -> SourceLocation {
+        SourceLocation {
+            line: 0,
+            column: 0,
+            file: self.name().into(),
+        }
+    }
+}
+
+impl FromIterator<char> for InMemoryFile {
+    fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> Self {
+        InMemoryFile {
+            name: "<string literal>".into(),
+            data: iter.into_iter().collect(),
+        }
+    }
+}
+
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("Invalid character: {}", token))]
@@ -187,21 +240,21 @@ mod test {
     #[test]
     fn test_number() {
         let source = "print 42";
-        let stream = lex(source.chars().collect()).unwrap();
+        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
         assert_eq!(stream.inner, vec![Token::Print, Token::Integer(42)]);
     }
 
     #[test]
     fn test_bool() {
         let source = "print true";
-        let stream = lex(source.chars().collect()).unwrap();
+        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
         assert_eq!(stream.inner, vec![Token::Print, Token::Boolean(true)]);
     }
 
     #[test]
     fn test_identifier() {
         let source = "print foo";
-        let stream = lex(source.chars().collect()).unwrap();
+        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
         assert_eq!(
             stream.inner,
             vec![Token::Print, Token::Identifier("foo".into())]
@@ -211,7 +264,7 @@ mod test {
     #[test]
     fn test_let() {
         let source = "let x = 42";
-        let stream = lex(source.chars().collect()).unwrap();
+        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
         assert_eq!(
             stream.inner,
             vec![

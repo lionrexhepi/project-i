@@ -168,13 +168,14 @@ fn parse_unary(stream: &mut TokenStream) -> Result<Expression> {
 
 #[cfg(test)]
 mod test {
+
     use super::*;
-    use crate::lexer::lex;
+    use crate::lexer::{lex, InMemoryFile};
 
     #[test]
     fn test_parse_binary() {
         let source = "1 + 2 * 3";
-        let mut stream = lex(source.chars().collect()).unwrap();
+        let mut stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
         let expr = parse_binary(&mut stream).unwrap();
         assert_eq!(
             expr,
