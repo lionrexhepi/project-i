@@ -101,14 +101,10 @@ fn transform_expression(
                 TypeId::VOID,
             )
         }
-        Expression::Binary(assignment) if assignment.op == BinaryOp::Assign => {
-            let (rhs, rhs_ty) = transform_expression(*assignment.right, symbols, prepend);
-            let variable = match *assignment.left {
-                Expression::Identifier(name) => name,
-                other => panic!("Invalid assign target: {other:?}"),
-            };
+        Expression::Assign { var, value } => {
+            let (rhs, rhs_ty) = transform_expression(*value, symbols, prepend);
 
-            let Some(Symbol::Variable(ty)) = symbols.get(&variable) else {
+            let Some(Symbol::Variable(ty)) = symbols.get(&var) else {
                 panic!("Undeclared variable")
             };
 
@@ -116,7 +112,7 @@ fn transform_expression(
 
             (
                 IrItem::Assign {
-                    var: variable,
+                    var,
                     value: Box::new(rhs),
                 },
                 TypeId::VOID,
@@ -141,7 +137,6 @@ fn transform_expression(
                     assert_eq!(rhs_ty, TypeId::BOOL);
                     TypeId::BOOL
                 }
-                BinaryOp::Assign => unreachable!(),
             };
             (
                 IrItem::Op {

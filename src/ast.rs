@@ -52,10 +52,16 @@ pub enum Expression {
     LitBool(bool),
     Identifier(SmolStr),
     Call(SmolStr, Vec<Expression>),
-    Function { body: Block },
+    Function {
+        body: Block,
+    },
     If(If),
     While(While),
     Binary(binary::Binary),
+    Assign {
+        var: SmolStr,
+        value: Box<Expression>,
+    },
 }
 
 #[macro_export]

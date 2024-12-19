@@ -22,7 +22,6 @@ pub enum BinaryOp {
     Ge,
     And,
     Or,
-    Assign,
 }
 
 pub fn parse_binary(stream: &mut TokenStream) -> Expression {
@@ -31,20 +30,19 @@ pub fn parse_binary(stream: &mut TokenStream) -> Expression {
 
 fn parse_assignment(stream: &mut TokenStream) -> Expression {
     let left = parse_or(stream);
-    let op = match stream.peek() {
-        Token::Eq => {
-            stream.advance();
-            BinaryOp::Assign
-        }
-        _ => return left,
+    let Token::Eq = stream.peek() else {
+        return left;
     };
     let right = parse_or(stream);
 
-    Expression::Binary(Binary {
-        left: Box::new(left),
-        op,
-        right: Box::new(right),
-    })
+    let Expression::Identifier(left) = left else {
+        panic!("expected identifier on left side of assignment")
+    };
+
+    Expression::Assign {
+        var: left,
+        value: Box::new(right),
+    }
 }
 
 fn parse_or(stream: &mut TokenStream) -> Expression {

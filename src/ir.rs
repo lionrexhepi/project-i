@@ -121,7 +121,6 @@ impl From<ast::BinaryOp> for Operator {
             ast::BinaryOp::Ge => Self::Gte,
             ast::BinaryOp::And => Self::And,
             ast::BinaryOp::Or => Self::Or,
-            ast::BinaryOp::Assign => todo!(),
         }
     }
 }
