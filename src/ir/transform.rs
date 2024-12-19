@@ -15,21 +15,18 @@ pub fn transform(ast: Ast) -> Ir {
     let mut items = Vec::with_capacity(ast.items().len());
 
     for item in ast.into_iter() {
-        let (item, _) = transform_statement(item, &mut symbols, &mut items);
+        let (item, _) = transform_statement(item, &mut symbols);
         items.push(item);
     }
-
     Ir { items }
 }
 
-fn transform_statement(
-    item: Item,
-    symbols: &mut SymbolTable,
-    list: &mut Vec<IrItem>,
-) -> AnnotatedItem {
-    match item {
+fn transform_statement(item: Item, symbols: &mut SymbolTable) -> AnnotatedItem {
+    let mut prepend = vec![];
+    let (item, ty) = match item {
         Item::Print(expr) => {
-            let (expr, _) = transform_expression(expr, symbols, list);
+            let (expr, _) = transform_expression(expr, symbols, &mut prepend);
+
             (IrItem::Print(Box::new(expr)), TypeId::VOID)
         }
         Item::Declaration {
@@ -45,7 +42,7 @@ fn transform_statement(
                 None => None,
             };
 
-            let (value, expr_ty) = transform_expression(value, symbols, list);
+            let (value, expr_ty) = transform_expression(value, symbols, &mut prepend);
 
             if let Some(named_ty) = named_type {
                 assert_eq!(named_ty, expr_ty);
@@ -64,14 +61,16 @@ fn transform_statement(
                 TypeId::VOID,
             )
         }
-        Item::Expression(expr) => transform_expression(expr, symbols, list),
-    }
+        Item::Expression(expr) => transform_expression(expr, symbols, &mut prepend),
+    };
+    prepend.push(item);
+    (IrItem::Multiple(prepend), ty)
 }
 
 fn transform_expression(
     expr: Expression,
     symbols: &mut SymbolTable,
-    list: &mut Vec<IrItem>,
+    prepend: &mut Vec<IrItem>,
 ) -> AnnotatedItem {
     match expr {
         Expression::LitInt(int) => (IrItem::LitInt(int), TypeId::INT),
@@ -83,16 +82,16 @@ fn transform_expression(
             (IrItem::Variable(name), *ty)
         }
         Expression::Function { body } => {
-            let (body, _) = transform_block(body, symbols, list);
+            let (body, _) = transform_block(body, symbols, None);
             (IrItem::Function { body }, TypeId::FUNCTION)
         }
-        Expression::If(r#if) => transform_if(r#if, symbols, list),
+        Expression::If(r#if) => transform_if(r#if, symbols, prepend, None),
         Expression::While(While { condition, body }) => {
-            let (condition, cond_ty) = transform_expression(*condition, symbols, list);
+            let (condition, cond_ty) = transform_expression(*condition, symbols, prepend);
 
             assert_eq!(cond_ty, TypeId::BOOL);
 
-            let (body, _) = transform_block(body, symbols, list);
+            let (body, _) = transform_block(body, symbols, None);
 
             (
                 IrItem::Loop {
@@ -103,7 +102,7 @@ fn transform_expression(
             )
         }
         Expression::Binary(assignment) if assignment.op == BinaryOp::Assign => {
-            let (rhs, rhs_ty) = transform_expression(*assignment.right, symbols, list);
+            let (rhs, rhs_ty) = transform_expression(*assignment.right, symbols, prepend);
             let variable = match *assignment.left {
                 Expression::Identifier(name) => name,
                 other => panic!("Invalid assign target: {other:?}"),
@@ -124,8 +123,8 @@ fn transform_expression(
             )
         }
         Expression::Binary(binary) => {
-            let (lhs, lhs_ty) = transform_expression(*binary.left, symbols, list);
-            let (rhs, rhs_ty) = transform_expression(*binary.right, symbols, list);
+            let (lhs, lhs_ty) = transform_expression(*binary.left, symbols, prepend);
+            let (rhs, rhs_ty) = transform_expression(*binary.right, symbols, prepend);
 
             let out = match binary.op {
                 BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
@@ -169,7 +168,7 @@ fn transform_expression(
                 .into_iter()
                 .zip(expected)
                 .map(|(expr, expected_ty)| {
-                    let (expr, ty) = transform_expression(expr, symbols, list);
+                    let (expr, ty) = transform_expression(expr, symbols, prepend);
                     assert_eq!(ty, expected_ty);
                     expr
                 })
@@ -179,24 +178,29 @@ fn transform_expression(
     }
 }
 
-fn transform_if(r#if: If, symbols: &mut SymbolTable, list: &mut Vec<IrItem>) -> AnnotatedItem {
-    let (condition, cond_ty) = transform_expression(*r#if.condition, symbols, list);
+fn transform_if(
+    r#if: If,
+    symbols: &mut SymbolTable,
+    prepend: &mut Vec<IrItem>,
+    save_to: Option<TempId>,
+) -> AnnotatedItem {
+    let (condition, cond_ty) = transform_expression(*r#if.condition, symbols, prepend);
 
     assert_eq!(cond_ty, TypeId::BOOL);
 
-    let temp = symbols.create_temporary();
+    let temp = save_to.unwrap_or_else(|| symbols.create_temporary());
 
-    let (then, then_ty) = transform_block(r#if.then, symbols, list);
+    let (then, then_ty) = transform_block(r#if.then, symbols, Some(temp));
 
     let otherwise = r#if
         .otherwise
         .map(|expr| match expr {
             Else::Block(block) => {
-                let (mut block, ty) = transform_block(block, symbols, list);
+                let (mut block, ty) = transform_block(block, symbols, Some(temp));
                 block.return_var = Some(temp.get_name());
                 (IrItem::Block(block), ty)
             }
-            Else::If(r#if) => transform_if(*r#if, symbols, list),
+            Else::If(r#if) => transform_if(*r#if, symbols, prepend, Some(temp)),
         })
         .map(|(item, otherwise_ty)| {
             if then_ty != otherwise_ty {
@@ -213,32 +217,28 @@ fn transform_if(r#if: If, symbols: &mut SymbolTable, list: &mut Vec<IrItem>) -> 
         then,
         otherwise,
     };
-    if then_ty == TypeId::VOID {
-        (r#if, TypeId::VOID)
+    if then_ty != TypeId::VOID {
+        prepend.push(r#if);
+        (IrItem::Variable(temp.get_name()), then_ty)
     } else {
-        todo!()
+        (r#if, then_ty)
     }
 }
 
 fn transform_block(
     block: Block,
     symbols: &mut SymbolTable,
-    list: &mut Vec<IrItem>,
+    save_to: Option<TempId>,
 ) -> AnnotatedBlock {
-    let temp: Option<TempId> = if block.semicolon_terminated {
-        None
-    } else {
-        block.statements.last().map(|_| symbols.create_temporary())
-    };
     symbols.push_scope();
     let len = block.statements.len();
-    let mut statements = Vec::with_capacity(if temp.is_some() { len + 1 } else { len });
+    let mut statements = Vec::with_capacity(if save_to.is_some() { len + 1 } else { len });
     let mut ty = TypeId::VOID;
     for (i, item) in block.statements.into_iter().enumerate() {
-        let (statement, statement_ty) = transform_statement(item, symbols, list);
+        let (statement, statement_ty) = transform_statement(item, symbols);
 
         if i == len - 1 {
-            if let Some(temp) = temp {
+            if let Some(temp) = save_to {
                 statements.push(IrItem::Assign {
                     var: temp.get_name(),
                     value: Box::new(statement),
@@ -257,15 +257,15 @@ fn transform_block(
         .map(|(id, ty)| (id.get_name(), symbols.resolve_type(ty).name().into()))
         .collect();
 
-    if let Some(temp) = temp {
-        symbols.set_temporary_type(temp, ty);
+    if let Some(save_to) = save_to {
+        symbols.set_temporary_type(save_to, ty);
     }
 
     (
         IrBlock {
             temporaries: tmp_decls,
             statements,
-            return_var: temp.map(|id| id.get_name()),
+            return_var: save_to.map(|id| id.get_name()),
         },
         ty,
     )
@@ -297,7 +297,7 @@ mod test {
             value: Expression::LitInt(42),
         };
 
-        let transformed = transform_statement(declaration, &mut symbols, &mut vec![]);
+        let transformed = transform_statement(declaration, &mut symbols);
 
         assert_eq!(
             transformed.0,

@@ -61,6 +61,7 @@ pub enum IrItem {
         name: SmolStr,
         args: Vec<IrItem>,
     },
+    Multiple(Vec<IrItem>),
 }
 
 #[derive(Debug, PartialEq)]

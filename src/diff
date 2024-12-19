@@ -1,0 +1,15 @@
+
+let a = if x < z {
+    x
+} else {
+    z
+}
+
+int temp0;
+if x < z {
+    temp0 = x;
+} else {
+    temp0 = z;
+}
+
+int a = temp0;

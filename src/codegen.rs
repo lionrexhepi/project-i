@@ -107,6 +107,11 @@ fn write_item(item: IrItem, to: &mut impl Write) {
             }
             to.write_all(b")").unwrap();
         }
+        IrItem::Multiple(items) => {
+            for item in items {
+                write_item(item, to);
+            }
+        }
     }
 }
 
