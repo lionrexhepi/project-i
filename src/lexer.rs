@@ -186,6 +186,8 @@ pub trait File {
 pub struct InMemoryFile {
     name: String,
     data: VecDeque<char>,
+    line: usize,
+    column: usize,
 }
 
 impl File for InMemoryFile {
@@ -194,7 +196,16 @@ impl File for InMemoryFile {
     }
 
     fn advance(&mut self) -> Option<char> {
-        self.data.remove(0)
+        let c = self.data.remove(0);
+        match c {
+            Some('\n') => {
+                self.line += 1;
+                self.column = 0;
+            }
+            Some(_) => self.column += 1,
+            None => {}
+        }
+        c
     }
 
     fn peek(&self) -> Option<char> {
@@ -207,8 +218,8 @@ impl File for InMemoryFile {
 
     fn location(&self) -> SourceLocation {
         SourceLocation {
-            line: 0,
-            column: 0,
+            line: self.line,
+            column: self.column,
             file: self.name().into(),
         }
     }
@@ -219,6 +230,8 @@ impl FromIterator<char> for InMemoryFile {
         InMemoryFile {
             name: "<string literal>".into(),
             data: iter.into_iter().collect(),
+            line: 0,
+            column: 0,
         }
     }
 }
