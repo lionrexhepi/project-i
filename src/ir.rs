@@ -1,9 +1,11 @@
-mod analyse;
-mod inference;
 pub mod symbols;
+mod transform;
 mod types;
+pub use transform::transform;
 
 use smol_str::SmolStr;
+
+use crate::ast;
 
 pub struct Ir {
     pub items: Vec<IrItem>,
@@ -21,6 +23,7 @@ where
     }
 }
 
+/// Stringly-typed intermediate representation
 #[derive(Debug, PartialEq)]
 pub enum IrItem {
     Print(Box<IrItem>),
@@ -62,17 +65,18 @@ pub enum IrItem {
 
 #[derive(Debug, PartialEq)]
 pub struct IrBlock {
-    tmp_results: Vec<(SmolStr, SmolStr)>,
+    temporaries: Vec<(SmolStr, SmolStr)>,
     statements: Vec<IrItem>,
+    pub(crate) return_var: Option<SmolStr>,
 }
 
 impl IntoIterator for IrBlock {
     type Item = IrItem;
     // the full beauty of rust
-    type IntoIter = std::iter::Chain<std::vec::IntoIter<IrItem>, std::vec::IntoIter<IrItem>>;
+    type IntoIter = std::vec::IntoIter<IrItem>;
     fn into_iter(self) -> Self::IntoIter {
-        let tmp_results = self
-            .tmp_results
+        let mut tmp_results = self
+            .temporaries
             .into_iter()
             .map(|(name, ty)| IrItem::Declaration {
                 typename: ty,
@@ -80,8 +84,9 @@ impl IntoIterator for IrBlock {
                 value: None,
             })
             .collect::<Vec<_>>();
+        tmp_results.extend(self.statements);
 
-        tmp_results.into_iter().chain(self.statements)
+        tmp_results.into_iter()
     }
 }
 
@@ -101,4 +106,21 @@ pub enum Operator {
     Or,
 }
 
-pub use analyse::analyse;
+impl From<ast::BinaryOp> for Operator {
+    fn from(value: ast::BinaryOp) -> Self {
+        match value {
+            ast::BinaryOp::Add => Self::Add,
+            ast::BinaryOp::Sub => Self::Sub,
+            ast::BinaryOp::Mul => Self::Mul,
+            ast::BinaryOp::Div => Self::Div,
+            ast::BinaryOp::Eq => Self::Eq,
+            ast::BinaryOp::Lt => Self::Lt,
+            ast::BinaryOp::Gt => Self::Gt,
+            ast::BinaryOp::Le => Self::Lte,
+            ast::BinaryOp::Ge => Self::Gte,
+            ast::BinaryOp::And => Self::And,
+            ast::BinaryOp::Or => Self::Or,
+            ast::BinaryOp::Assign => todo!(),
+        }
+    }
+}

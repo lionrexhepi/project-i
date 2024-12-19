@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct TypeMap(Vec<Type>);
 
 impl Default for TypeMap {

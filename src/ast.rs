@@ -17,6 +17,10 @@ impl Ast {
     pub fn into_iter(self) -> impl Iterator<Item = Item> {
         self.items.into_iter()
     }
+
+    pub fn items(&self) -> &[Item] {
+        &self.items
+    }
 }
 
 #[cfg(test)]
@@ -65,12 +69,9 @@ macro_rules! expect {
 
 pub fn parse(stream: &mut TokenStream) -> Ast {
     let mut items = Vec::new();
-    loop {
-        if let Some(item) = parse_item(stream) {
-            items.push(item);
-        } else {
-            break;
-        }
+    while let Some(item) = parse_item(stream) {
+        items.push(item);
+
         let (Token::Semicolon | Token::Eof) = stream.advance() else {
             panic!("Expected semicolon to terminate statement")
         };
