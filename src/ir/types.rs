@@ -51,7 +51,9 @@ impl Type {
             Type::Unit => "void",
             Type::Int => "int",
             Type::Bool => "bool",
-            Type::Function { args: _, ret: _ } => "###FUNCTION###", // To make GCC error if this gets into the generated C code
+            Type::Function { args: _, ret: _ } => {
+                panic!("Don't call name on function pointer types")
+            }
         }
     }
 }
