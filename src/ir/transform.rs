@@ -287,7 +287,7 @@ mod test {
         assert_eq!(program.items.len(), 1);
         assert_eq!(
             program.items[0],
-            IrItem::Print(Box::new(IrItem::LitInt(42)))
+            IrItem::Multiple(vec![IrItem::Print(Box::new(IrItem::LitInt(42)))])
         );
     }
 
@@ -304,17 +304,17 @@ mod test {
 
         assert_eq!(
             transformed.0,
-            IrItem::Declaration {
+            IrItem::Multiple(vec![IrItem::Declaration {
                 typename: "int".into(),
                 var: "foo".into(),
                 value: Some(Box::new(IrItem::LitInt(42)))
-            }
+            }])
         );
         assert_eq!(symbols.get("foo"), Some(&Symbol::Variable(TypeId::INT)))
     }
 
     #[test]
-    #[should_panic(expected = "undeclared variable: foo")]
+    #[should_panic(expected = "UndeclaredVariable")]
     fn test_undeclared() {
         let mut symbols = SymbolTable::default();
         let expression = Expression::Identifier("foo".into());
