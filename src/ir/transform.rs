@@ -66,7 +66,7 @@ fn transform_statement(item: Item, symbols: &mut SymbolTable) -> Result<Annotate
             (
                 IrItem::Declaration {
                     typename,
-                    var: name,
+                    var: name.into(),
                     value: Some(Box::new(value)),
                 },
                 TypeId::VOID,
@@ -90,7 +90,7 @@ fn transform_expression(
             let Some(Symbol::Variable(ty)) = symbols.get(&name) else {
                 return Err(Error::UndeclaredVariable { var: name });
             };
-            Ok((IrItem::Variable(name), *ty))
+            Ok((IrItem::Variable(name.into()), *ty))
         }
         Expression::Function { body } => {
             let (body, _) = transform_block(body, symbols, None)?;
@@ -123,7 +123,7 @@ fn transform_expression(
 
             Ok((
                 IrItem::Assign {
-                    var,
+                    var: var.into(),
                     value: Box::new(rhs),
                 },
                 TypeId::VOID,
@@ -179,7 +179,13 @@ fn transform_expression(
                     Ok(expr)
                 })
                 .collect::<Result<Vec<_>>>()?;
-            Ok((IrItem::Call { name, args }, ret))
+            Ok((
+                IrItem::Call {
+                    name: name.into(),
+                    args,
+                },
+                ret,
+            ))
         }
     }
 }

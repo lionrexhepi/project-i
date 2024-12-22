@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use smol_str::SmolStr;
 
+use crate::ast::Identifier;
+
 use super::types::{Type, TypeId, TypeMap};
 
 #[derive(Debug)]
@@ -89,7 +91,7 @@ impl SymbolTable {
 
 #[derive(Debug)]
 struct Scope {
-    symbols: HashMap<SmolStr, Symbol>,
+    symbols: HashMap<Identifier, Symbol>,
     temporaries: Vec<Temp>,
     parent: Option<ScopeIndex>,
     children: Vec<ScopeIndex>,

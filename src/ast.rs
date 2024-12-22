@@ -1,10 +1,10 @@
 mod binary;
 mod flow;
+mod ident;
 use binary::parse_binary;
 pub use binary::{Binary, BinaryOp};
 use flow::{parse_block, parse_if, parse_while};
 pub use flow::{Block, Else, If, While};
-use smol_str::SmolStr;
 use snafu::Snafu;
 
 use crate::lexer::{Token, TokenStream};
@@ -40,19 +40,21 @@ where
 pub enum Item {
     Print(Expression),
     Declaration {
-        name: SmolStr,
-        typename: Option<SmolStr>,
+        name: Identifier,
+        typename: Option<Identifier>,
         value: Expression,
     },
     Expression(Expression),
 }
 
+pub use ident::Identifier;
+
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     LitInt(i64),
     LitBool(bool),
-    Identifier(SmolStr),
-    Call(SmolStr, Vec<Expression>),
+    Identifier(Identifier),
+    Call(Identifier, Vec<Expression>),
     Function {
         body: Block,
     },
@@ -60,7 +62,7 @@ pub enum Expression {
     While(While),
     Binary(binary::Binary),
     Assign {
-        var: SmolStr,
+        var: Identifier,
         value: Box<Expression>,
     },
 }

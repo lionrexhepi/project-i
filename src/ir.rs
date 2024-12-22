@@ -6,7 +6,7 @@ pub use transform::transform;
 
 use smol_str::SmolStr;
 
-use crate::ast;
+use crate::ast::{self, Identifier};
 
 pub struct Ir {
     pub items: Vec<IrItem>,
@@ -129,15 +129,18 @@ impl From<ast::BinaryOp> for Operator {
 #[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(display("Type mismatch: expected {}, found {}", expected, found))]
-    TypeMismatch { expected: SmolStr, found: SmolStr },
+    TypeMismatch {
+        expected: Identifier,
+        found: Identifier,
+    },
     #[snafu(display("Variable not found: {}", var))]
-    UndeclaredVariable { var: SmolStr },
+    UndeclaredVariable { var: Identifier },
     #[snafu(display("Function not found: {}", name))]
-    FunctionNotFound { name: SmolStr },
+    FunctionNotFound { name: Identifier },
     #[snafu(display("Undeclared type: {}", name))]
-    UndeclaredType { name: SmolStr },
+    UndeclaredType { name: Identifier },
     #[snafu(display("Not a function: {}", name))]
-    NotAFunction { name: SmolStr },
+    NotAFunction { name: Identifier },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

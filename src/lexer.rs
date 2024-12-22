@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use smol_str::{SmolStr, SmolStrBuilder};
 use snafu::Snafu;
 
-use crate::errors::SourceLocation;
+use crate::{ast::Identifier, errors::SourceLocation};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
@@ -11,7 +11,7 @@ pub enum Token {
     Integer(i64),
     Boolean(bool),
     //Identifiers
-    Identifier(SmolStr),
+    Identifier(Identifier),
     // Keywords
     Print,
     Fn,
@@ -156,7 +156,7 @@ fn special_ident(ident: SmolStr) -> Token {
         "while" => Token::While,
         "if" => Token::If,
         "else" => Token::Else,
-        _ => Token::Identifier(ident),
+        _ => Token::Identifier(ident.into()),
     }
 }
 
