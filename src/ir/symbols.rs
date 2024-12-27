@@ -4,7 +4,7 @@ use smol_str::SmolStr;
 
 use crate::ast::Identifier;
 
-use super::types::{Type, TypeId, TypeMap};
+use super::types::{Signature, Type, TypeId, TypeMap};
 
 #[derive(Debug)]
 pub struct SymbolTable {
@@ -49,6 +49,10 @@ impl SymbolTable {
 
     pub fn resolve_type(&self, id: TypeId) -> &Type {
         self.types.get(id).expect("Invalid type id")
+    }
+
+    pub fn function_pointer(&mut self, args: Vec<TypeId>, ret: TypeId) -> TypeId {
+        self.types.function_pointer(args, ret)
     }
 
     pub fn create_temporary(&mut self) -> TempId {
@@ -101,10 +105,10 @@ impl Scope {
     fn global() -> Self {
         let mut symbols = HashMap::new();
         let mut types = TypeMap::default();
-        let add2 = types.push(Type::Function {
+        let add2 = types.push(Type::Function(Signature {
             args: vec![TypeId::INT],
             ret: TypeId::INT,
-        });
+        }));
         symbols.insert("i32".into(), Symbol::Type(TypeId::INT));
         symbols.insert("bool".into(), Symbol::Type(TypeId::BOOL));
         symbols.insert("add2".into(), Symbol::Variable(add2));

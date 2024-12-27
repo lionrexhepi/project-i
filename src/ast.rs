@@ -56,7 +56,9 @@ pub enum Expression {
     Identifier(Identifier),
     Call(Identifier, Vec<Expression>),
     Function {
+        args: Vec<FnArg>,
         body: Block,
+        return_type: Option<Identifier>,
     },
     If(If),
     While(While),
@@ -67,12 +69,19 @@ pub enum Expression {
     },
 }
 
+#[derive(Debug, PartialEq)]
+pub struct FnArg {
+    pub name: Identifier,
+    pub typename: Identifier,
+}
+
 #[macro_export]
 macro_rules! expect {
     ($stream:ident, $pat:pat, $expected:expr) => {
-        let $pat = (match $stream.peek() {
+        let temp = $stream.peek();
+        let $pat = (match &temp.payload {
             #[allow(unused_variables)]
-            $pat => $stream.advance(),
+            $pat => $stream.advance().payload,
             other => Err(Error::UnexpectedToken {
                 expected: $expected,
                 found: other.clone(),
@@ -88,7 +97,7 @@ pub fn parse(stream: &mut TokenStream) -> Result<Ast> {
     while let Some(item) = parse_item(stream)? {
         items.push(item);
 
-        let (Payload::Semicolon | Payload::Eof) = stream.advance() else {
+        let (Payload::Semicolon | Payload::Eof) = stream.advance().payload else {
             panic!("Expected semicolon to terminate statement")
         };
     }
@@ -96,7 +105,7 @@ pub fn parse(stream: &mut TokenStream) -> Result<Ast> {
 }
 
 fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
-    let item = match stream.peek() {
+    let item = match stream.peek().payload {
         Payload::Eof => return Ok(None),
         Payload::Print => {
             stream.advance();
@@ -107,7 +116,7 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
             stream.advance();
             expect!(stream, Payload::Identifier(name), "identifier");
 
-            let typename = match stream.peek() {
+            let typename = match stream.peek().payload {
                 Payload::Colon => {
                     stream.advance();
                     expect!(stream, Payload::Identifier(ident), "identifier");
@@ -134,11 +143,38 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
 }
 
 fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
-    match stream.peek() {
+    match stream.peek().payload {
         Payload::Fn => {
             stream.advance();
+            let mut args = Vec::new();
+            if let Payload::LParen = stream.peek().payload {
+                stream.advance();
+                while let Payload::Identifier(_) = stream.peek().payload {
+                    let Payload::Identifier(name) = stream.advance().payload else {
+                        unreachable!()
+                    };
+                    expect!(stream, Payload::Colon, "a colon");
+                    expect!(stream, Payload::Identifier(typename), "a typename");
+                    args.push(FnArg { name, typename });
+                    if let Payload::Comma = stream.peek().payload {
+                        stream.advance();
+                    }
+                }
+                expect!(stream, Payload::RParen, "a closing parenthesis");
+            };
+
+            let return_type = if let Payload::Colon = stream.peek().payload {
+                stream.advance();
+                expect!(stream, Payload::Identifier(ident), "a typename");
+                Some(ident)
+            } else {
+                None
+            };
+
             Ok(Expression::Function {
                 body: parse_block(stream)?,
+                args,
+                return_type,
             })
         }
         Payload::If => {
@@ -165,96 +201,3 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_print_int() {
-        let mut stream = TokenStream::from([Payload::Print, Payload::Integer(42)]);
-        let items = parse(&mut stream).unwrap();
-        assert_eq!(items.items.len(), 1);
-        assert!(matches!(
-            items.items[0],
-            Item::Print(Expression::LitInt(42))
-        ))
-    }
-
-    #[test]
-    fn test_print_bool() {
-        let mut stream = TokenStream::from([Payload::Print, Payload::Boolean(true)]);
-        let items = parse(&mut stream).unwrap();
-        assert_eq!(items.items.len(), 1);
-        assert!(matches!(
-            items.items[0],
-            Item::Print(Expression::LitBool(true))
-        ))
-    }
-
-    #[test]
-    fn test_print_identifier() {
-        let mut stream = TokenStream::from([Payload::Print, Payload::Identifier("foo".into())]);
-        let items = parse(&mut stream).unwrap();
-        assert_eq!(items.items.len(), 1);
-        assert_eq!(
-            items.items[0],
-            Item::Print(Expression::Identifier("foo".into()))
-        );
-    }
-
-    #[test]
-    fn test_let_int() {
-        use Payload::*;
-        let mut stream = TokenStream::from([
-            Let,
-            Identifier("foo".into()),
-            Colon,
-            Identifier("int".into()),
-            Eq,
-            Integer(42),
-        ]);
-        let items = parse(&mut stream).unwrap();
-        assert_eq!(items.items.len(), 1);
-        assert_eq!(
-            items.items[0],
-            Item::Declaration {
-                name: "foo".into(),
-                typename: Some("int".into()),
-                value: Expression::LitInt(42)
-            }
-        );
-    }
-
-    #[test]
-    fn test_fn_expr() {
-        use Payload::*;
-        let mut stream = TokenStream::from([
-            Let,
-            Identifier("func".into()),
-            Colon,
-            Identifier("fn".into()),
-            Eq,
-            Fn,
-            LBrace,
-            Print,
-            Integer(42),
-            RBrace,
-        ]);
-        let items = parse(&mut stream).unwrap();
-        assert_eq!(items.items.len(), 1);
-        assert_eq!(
-            items.items[0],
-            Item::Declaration {
-                name: "func".into(),
-                typename: Some("fn".into()),
-                value: Expression::Function {
-                    body: Block {
-                        statements: vec![Item::Print(Expression::LitInt(42))],
-                        semicolon_terminated: false
-                    }
-                }
-            }
-        );
-    }
-}

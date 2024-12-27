@@ -1,29 +1,39 @@
+use std::collections::HashMap;
+
 #[derive(Debug)]
-pub struct TypeMap(Vec<Type>);
+pub struct TypeMap {
+    types: Vec<Type>,
+    functions: HashMap<Signature, TypeId>,
+}
 
 impl Default for TypeMap {
     fn default() -> Self {
-        TypeMap(vec![
-            Type::Unit,
-            Type::Int,
-            Type::Bool,
-            Type::Function {
-                args: vec![],
-                ret: TypeId::VOID,
-            },
-        ])
+        TypeMap {
+            types: vec![Type::Unit, Type::Int, Type::Bool],
+            functions: HashMap::new(),
+        }
     }
 }
 
 impl TypeMap {
     pub fn push(&mut self, ty: Type) -> TypeId {
-        let id = TypeId(self.0.len());
-        self.0.push(ty);
+        let id = TypeId(self.types.len());
+        self.types.push(ty);
         id
     }
 
     pub fn get(&self, id: TypeId) -> Option<&Type> {
-        self.0.get(id.0)
+        self.types.get(id.0)
+    }
+
+    pub fn function_pointer(&mut self, args: Vec<TypeId>, ret: TypeId) -> TypeId {
+        let sig = Signature { args, ret };
+        if let Some(&id) = self.functions.get(&sig) {
+            return id;
+        }
+        let id = self.push(Type::Function(sig.clone()));
+        self.functions.insert(sig, id);
+        id
     }
 }
 
@@ -42,7 +52,7 @@ pub enum Type {
     Unit,
     Int,
     Bool,
-    Function { args: Vec<TypeId>, ret: TypeId },
+    Function(Signature),
 }
 
 impl Type {
@@ -63,4 +73,10 @@ impl Type {
             Type::Function { .. } => "function",
         }
     }
+}
+
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+pub struct Signature {
+    pub args: Vec<TypeId>,
+    pub ret: TypeId,
 }

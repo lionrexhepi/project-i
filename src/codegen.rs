@@ -20,10 +20,22 @@ fn write_item(item: IrItem, to: &mut impl Write) {
             var,
             value: Some(value),
         } if matches!(&*value, IrItem::Function { .. }) => {
-            let IrItem::Function { body } = *value else {
+            let IrItem::Function {
+                body,
+                return_type,
+                args,
+            } = *value
+            else {
                 unreachable!()
             };
-            write!(to, "int {}(){{", var).unwrap();
+
+            let args = args
+                .into_iter()
+                .map(|(ty, name)| format!("{} {}", ty, name))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            write!(to, "{} {}({}){{", return_type, var, args).unwrap();
             for item in body {
                 write_item(item, to);
             }

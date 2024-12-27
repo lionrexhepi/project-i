@@ -37,6 +37,8 @@ pub enum IrItem {
     LitBool(bool),
     Variable(SmolStr),
     Function {
+        args: Vec<(SmolStr, SmolStr)>,
+        return_type: SmolStr,
         body: IrBlock,
     },
     If {

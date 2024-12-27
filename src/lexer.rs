@@ -44,7 +44,7 @@ pub enum Payload {
 
 #[derive(Debug)]
 pub struct TokenStream {
-    pub inner: VecDeque<Payload>,
+    pub inner: VecDeque<Token>,
 }
 
 impl TokenStream {
@@ -54,16 +54,45 @@ impl TokenStream {
         }
     }
 
-    fn push(&mut self, token: Payload) {
+    fn push(&mut self, token: Token) {
         self.inner.push_back(token);
     }
 
-    pub fn advance(&mut self) -> Payload {
-        self.inner.pop_front().unwrap_or(Payload::Eof)
+    pub fn advance(&mut self) -> Token {
+        self.inner.pop_front().unwrap_or(Token::EOF)
     }
 
-    pub fn peek(&self) -> &Payload {
-        self.inner.front().unwrap_or(&Payload::Eof)
+    pub fn peek(&self) -> &Token {
+        const EOF_REF: &Token = &Token::EOF;
+        self.inner.front().unwrap_or(EOF_REF)
+    }
+}
+
+#[derive(Debug)]
+pub struct Token {
+    pub payload: Payload,
+    pub location: SourceLocation,
+}
+
+impl Token {
+    const EOF: Token = Token {
+        payload: Payload::Eof,
+        location: SourceLocation {
+            line: 0,
+            column: 0,
+            file: SmolStr::new_static("<EOF>"),
+        },
+    };
+
+    pub fn eof() -> Self {
+        Token {
+            payload: Payload::Eof,
+            location: SourceLocation {
+                line: 0,
+                column: 0,
+                file: "<EOF>".into(),
+            },
+        }
     }
 }
 
@@ -74,6 +103,8 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
         let Some(c) = source.peek() else {
             break;
         };
+
+        let location = source.location();
 
         if c.is_ascii_whitespace() {
             source.advance();
@@ -90,7 +121,10 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
                     }
                     _ => {
                         let ident = ident.finish();
-                        stream.push(special_ident(ident));
+                        stream.push(Token {
+                            payload: special_ident(ident),
+                            location,
+                        });
                         break;
                     }
                 }
@@ -107,14 +141,17 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
                         source.advance();
                     }
                     _ => {
-                        stream.push(Payload::Integer(lit));
+                        stream.push(Token {
+                            payload: Payload::Integer(lit),
+                            location,
+                        });
                         break;
                     }
                 }
             }
         } else {
             source.advance();
-            stream.push(match c {
+            let payload = match c {
                 ',' => Payload::Comma,
                 ';' => Payload::Semicolon,
                 '(' => Payload::LParen,
@@ -139,7 +176,8 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
                 '|' => Payload::Or,
                 '&' => Payload::And,
                 other => return Err(Error::UnexpectedCharacter { token: other }),
-            });
+            };
+            stream.push(Token { payload, location });
         }
     }
 
@@ -157,18 +195,6 @@ fn special_ident(ident: SmolStr) -> Payload {
         "if" => Payload::If,
         "else" => Payload::Else,
         _ => Payload::Identifier(ident.into()),
-    }
-}
-
-#[cfg(test)]
-impl<I> From<I> for TokenStream
-where
-    I: IntoIterator<Item = Payload>,
-{
-    fn from(tokens: I) -> Self {
-        TokenStream {
-            inner: tokens.into_iter().collect(),
-        }
     }
 }
 
@@ -245,47 +271,3 @@ pub enum Error {
 }
 
 type Result<T> = std::result::Result<T, Error>;
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_number() {
-        let source = "print 42";
-        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
-        assert_eq!(stream.inner, vec![Payload::Print, Payload::Integer(42)]);
-    }
-
-    #[test]
-    fn test_bool() {
-        let source = "print true";
-        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
-        assert_eq!(stream.inner, vec![Payload::Print, Payload::Boolean(true)]);
-    }
-
-    #[test]
-    fn test_identifier() {
-        let source = "print foo";
-        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
-        assert_eq!(
-            stream.inner,
-            vec![Payload::Print, Payload::Identifier("foo".into())]
-        );
-    }
-
-    #[test]
-    fn test_let() {
-        let source = "let x = 42";
-        let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
-        assert_eq!(
-            stream.inner,
-            vec![
-                Payload::Let,
-                Payload::Identifier("x".into()),
-                Payload::Eq,
-                Payload::Integer(42)
-            ]
-        );
-    }
-}

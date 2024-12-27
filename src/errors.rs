@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 use crate::{ast, ir, lexer};
 
 pub enum ErrorPayload {
@@ -11,8 +13,9 @@ pub struct Error {
     pub payload: ErrorPayload,
 }
 
+#[derive(Debug)]
 pub struct SourceLocation {
-    pub file: String,
+    pub file: SmolStr,
     pub line: usize,
     pub column: usize,
 }

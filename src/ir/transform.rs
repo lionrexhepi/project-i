@@ -1,9 +1,9 @@
 //! Transform AST nodes into IR nodes.
-use crate::ast::{Ast, BinaryOp, Block, Else, Expression, If, Item, While};
+use crate::ast::{Ast, BinaryOp, Block, Else, Expression, FnArg, If, Item, While};
 
 use super::{
     symbols::{Symbol, SymbolTable, TempId},
-    types::{Type, TypeId},
+    types::{Signature, Type, TypeId},
     Error, Ir, IrBlock, IrItem, Result,
 };
 
@@ -92,9 +92,69 @@ fn transform_expression(
             };
             Ok((IrItem::Variable(name.into()), *ty))
         }
-        Expression::Function { body } => {
-            let (body, _) = transform_block(body, symbols, None)?;
-            Ok((IrItem::Function { body }, TypeId::FUNCTION))
+        Expression::Function {
+            body,
+            args,
+            return_type,
+        } => {
+            let return_type = return_type
+                .map(|name| {
+                    let Symbol::Type(ty) = symbols
+                        .get(&name)
+                        .ok_or_else(|| Error::UndeclaredType { name: name.clone() })?
+                    else {
+                        return Err(Error::UndeclaredType { name });
+                    };
+                    Ok(*ty)
+                })
+                .transpose()?
+                .unwrap_or(TypeId::VOID);
+
+            let args = args
+                .into_iter()
+                .map(|FnArg { name, typename }| {
+                    let Symbol::Type(ty) =
+                        symbols
+                            .get(&typename)
+                            .ok_or_else(|| Error::UndeclaredType {
+                                name: typename.clone(),
+                            })?
+                    else {
+                        return Err(Error::UndeclaredType { name: typename });
+                    };
+                    Ok((name, *ty))
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            symbols.push_scope();
+
+            for (name, ty) in args.iter() {
+                symbols.insert(name, Symbol::Variable(*ty));
+            }
+
+            let (body, actual_return_type) = transform_block(body, symbols, None)?;
+
+            symbols.pop_scope();
+
+            assert_types!(symbols, actual_return_type, return_type);
+
+            let arg_types = args.iter().map(|(_, ty)| *ty).collect();
+
+            let id = symbols.function_pointer(arg_types, return_type);
+
+            let args = args
+                .into_iter()
+                .map(|(name, ty)| (name.into(), symbols.resolve_type(ty).c_name().into()))
+                .collect();
+
+            Ok((
+                IrItem::Function {
+                    body,
+                    args,
+                    return_type: symbols.resolve_type(return_type).c_name().into(),
+                },
+                id,
+            ))
         }
         Expression::If(r#if) => transform_if(r#if, symbols, prepend, None),
         Expression::While(While { condition, body }) => {
@@ -162,10 +222,10 @@ fn transform_expression(
             let Some(Symbol::Variable(id)) = symbols.get(&name) else {
                 return Err(Error::UndeclaredVariable { var: name });
             };
-            let Type::Function {
+            let Type::Function(Signature {
                 args: expected,
                 ret,
-            } = symbols.resolve_type(*id).clone()
+            }) = symbols.resolve_type(*id).clone()
             else {
                 return Err(Error::FunctionNotFound { name });
             };

@@ -8,7 +8,11 @@ use project_i::{
 };
 
 fn main() {
-    let source = r#"let main = fn {
+    let source = r#"
+
+      
+
+        let main = fn {
         let a: i32 = if true {
             let b = 1;
             b + 2
