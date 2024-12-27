@@ -79,32 +79,35 @@ fn parse_else(stream: &mut TokenStream) -> Result<Else> {
 pub fn parse_block(stream: &mut TokenStream) -> Result<Block> {
     expect!(stream, Payload::LBrace, "An opening brace");
     let mut block = Vec::new();
-    let mut must_close = false;
+    let mut had_semicolon = true;
     let semicolon_terminated = loop {
-        match stream.peek().payload {
+        let peek = stream.peek();
+        match &peek.payload {
             Payload::RBrace => {
                 stream.advance();
-                // If the last statement read a semicolon afterwards, must_close will be false.
-                break !must_close;
+                break had_semicolon;
             }
-            other if must_close => {
+            other if !had_semicolon => {
                 return Err(Error::UnexpectedToken {
                     expected: "}",
-                    found: other,
+                    found: other.clone(),
+                    at: peek.location.clone(),
                 })
             }
-            other => {
+            _ => {
                 let Some(item) = parse_item(stream)? else {
+                    let found = stream.peek().clone();
                     return Err(Error::UnexpectedToken {
                         expected: "A statement",
-                        found: other,
+                        found: found.payload,
+                        at: found.location,
                     });
                 };
                 block.push(item);
                 if let Payload::Semicolon = stream.peek().payload {
                     stream.advance();
                 } else {
-                    must_close = true;
+                    had_semicolon = false;
                 };
             }
         }

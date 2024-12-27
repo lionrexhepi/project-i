@@ -68,7 +68,7 @@ impl TokenStream {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub payload: Payload,
     pub location: SourceLocation,
@@ -160,7 +160,7 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
                 '{' => Payload::LBrace,
                 '}' => Payload::RBrace,
                 '=' => {
-                    if let Some('=') = source.peek_n(1) {
+                    if let Some('=') = source.peek() {
                         source.advance();
                         Payload::DoubleEq
                     } else {

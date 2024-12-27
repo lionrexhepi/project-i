@@ -34,7 +34,6 @@ impl SymbolTable {
     pub fn get(&self, name: &str) -> Option<&Symbol> {
         let mut scope = self.current_scope;
         loop {
-            println!("Checking scope #{scope}");
             if let Some(symbol) = self.scope_arena[scope].get(name) {
                 return Some(symbol);
             }

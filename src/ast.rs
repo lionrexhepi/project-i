@@ -7,7 +7,10 @@ use flow::{parse_block, parse_if, parse_while};
 pub use flow::{Block, Else, If, While};
 use snafu::Snafu;
 
-use crate::lexer::{Payload, TokenStream};
+use crate::{
+    errors::SourceLocation,
+    lexer::{Payload, Token, TokenStream},
+};
 
 pub struct Ast {
     items: Vec<Item>,
@@ -85,6 +88,7 @@ macro_rules! expect {
             other => Err(Error::UnexpectedToken {
                 expected: $expected,
                 found: other.clone(),
+                at: temp.location.clone(),
             })?,
         }) else {
             unreachable!()
@@ -96,13 +100,14 @@ pub fn parse(stream: &mut TokenStream) -> Result<Ast> {
     let mut items = Vec::new();
     while let Some(item) = parse_item(stream)? {
         items.push(item);
-
-        match stream.advance().payload {
-            (Payload::Semicolon | Payload::Eof) => {}
+        let next = stream.advance();
+        match next.payload {
+            Payload::Semicolon | Payload::Eof => {}
             other => {
                 return Err(Error::UnexpectedToken {
                     expected: "A semicolon to terminate a statement",
                     found: other,
+                    at: next.location,
                 })
             }
         }
@@ -120,9 +125,10 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
         }
         Payload::Let => {
             stream.advance();
+            println!("Parsing decl ");
             expect!(stream, Payload::Identifier(name), "identifier");
-
-            let typename = match &stream.peek().payload {
+            let Token { payload, location } = stream.peek();
+            let typename = match payload {
                 Payload::Colon => {
                     stream.advance();
                     expect!(stream, Payload::Identifier(ident), "identifier");
@@ -133,11 +139,16 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
                     return Err(Error::UnexpectedToken {
                         expected: ": or =",
                         found: other.clone(),
+                        at: location.clone(),
                     })
                 }
             };
 
+            println!("Type: {typename:?}");
+
             expect!(stream, Payload::Eq, "an assignment");
+
+            println!("next: {:?}", stream.peek());
 
             let value = parse_expression(stream)?;
 
@@ -153,14 +164,17 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
     Ok(Some(item))
 }
 
+#[track_caller]
 fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
     match stream.peek().payload {
         Payload::Fn => {
             stream.advance();
+            dbg!(stream.peek());
             let mut args = Vec::new();
             if let Payload::LParen = stream.peek().payload {
                 stream.advance();
                 while let Payload::Identifier(_) = stream.peek().payload {
+                    dbg!(stream.peek());
                     let Payload::Identifier(name) = stream.advance().payload else {
                         unreachable!()
                     };
@@ -173,6 +187,7 @@ fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
                 }
                 expect!(stream, Payload::RParen, "a closing parenthesis");
             };
+            dbg!(stream.peek());
 
             let return_type = if let Payload::Colon = stream.peek().payload {
                 stream.advance();
@@ -204,10 +219,11 @@ fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
 
 #[derive(Debug, Snafu)]
 pub enum Error {
-    #[snafu(display("unexpected token: expected {}, found {:?}", expected, found))]
+    #[snafu(display("{:?}: unexpected token: expected {}, found {:?}", at, expected, found))]
     UnexpectedToken {
         expected: &'static str,
         found: Payload,
+        at: SourceLocation,
     },
 }
 

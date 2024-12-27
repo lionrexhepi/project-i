@@ -13,7 +13,7 @@ pub struct Error {
     pub payload: ErrorPayload,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SourceLocation {
     pub file: SmolStr,
     pub line: usize,

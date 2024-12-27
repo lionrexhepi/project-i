@@ -1,6 +1,6 @@
 use crate::{
     expect,
-    lexer::{Payload, TokenStream},
+    lexer::{Payload, Token, TokenStream},
 };
 
 use super::{Error, Expression, Result};
@@ -26,13 +26,14 @@ pub enum BinaryOp {
     And,
     Or,
 }
+#[track_caller]
 
 pub fn parse_binary(stream: &mut TokenStream) -> Result<Expression> {
     parse_assignment(stream)
 }
+#[track_caller]
 
 fn parse_assignment(stream: &mut TokenStream) -> Result<Expression> {
-    println!("parse_assignment");
     let left = parse_or(stream)?;
     let Payload::Eq = stream.peek().payload else {
         return Ok(left);
@@ -50,9 +51,9 @@ fn parse_assignment(stream: &mut TokenStream) -> Result<Expression> {
         value: Box::new(right),
     })
 }
+#[track_caller]
 
 fn parse_or(stream: &mut TokenStream) -> Result<Expression> {
-    println!("parse_or");
     let mut left = parse_and(stream)?;
     while let Payload::Or = stream.peek().payload {
         stream.advance();
@@ -65,9 +66,9 @@ fn parse_or(stream: &mut TokenStream) -> Result<Expression> {
     }
     Ok(left)
 }
+#[track_caller]
 
 fn parse_and(stream: &mut TokenStream) -> Result<Expression> {
-    println!("parse_and");
     let mut left = parse_comparison(stream)?;
     while let Payload::And = stream.peek().payload {
         stream.advance();
@@ -80,9 +81,9 @@ fn parse_and(stream: &mut TokenStream) -> Result<Expression> {
     }
     Ok(left)
 }
+#[track_caller]
 
 fn parse_comparison(stream: &mut TokenStream) -> Result<Expression> {
-    println!("parse_comparison");
     let mut left = parse_term(stream)?;
     loop {
         let op = match stream.peek().payload {
@@ -101,9 +102,9 @@ fn parse_comparison(stream: &mut TokenStream) -> Result<Expression> {
     }
     Ok(left)
 }
+#[track_caller]
 
 fn parse_term(stream: &mut TokenStream) -> Result<Expression> {
-    println!("parse_term");
     let mut left = parse_factor(stream)?;
     loop {
         let op = match stream.peek().payload {
@@ -121,9 +122,9 @@ fn parse_term(stream: &mut TokenStream) -> Result<Expression> {
     }
     Ok(left)
 }
+#[track_caller]
 
 fn parse_factor(stream: &mut TokenStream) -> Result<Expression> {
-    println!("parse_factor");
     let mut left = parse_unary(stream)?;
     loop {
         let op = match stream.peek().payload {
@@ -142,9 +143,10 @@ fn parse_factor(stream: &mut TokenStream) -> Result<Expression> {
     Ok(left)
 }
 
+#[track_caller]
 fn parse_unary(stream: &mut TokenStream) -> Result<Expression> {
-    println!("parse_unary");
-    match stream.advance().payload {
+    let Token { payload, location } = stream.advance();
+    match payload {
         Payload::Integer(i) => Ok(Expression::LitInt(i)),
         Payload::Boolean(b) => Ok(Expression::LitBool(b)),
         Payload::Identifier(ident) => {
@@ -166,10 +168,14 @@ fn parse_unary(stream: &mut TokenStream) -> Result<Expression> {
                 Ok(Expression::Identifier(ident))
             }
         }
-        other => Err(Error::UnexpectedToken {
-            expected: "Literal or identifier",
-            found: other,
-        }),
+        other => {
+            dbg!(std::panic::Location::caller());
+            Err(Error::UnexpectedToken {
+                expected: "Literal or identifier",
+                found: other,
+                at: location,
+            })
+        }
     }
 }
 
