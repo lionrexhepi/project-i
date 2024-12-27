@@ -4,7 +4,7 @@
 use crate::{
     ast::{parse_expression, parse_item},
     expect,
-    lexer::{Token, TokenStream},
+    lexer::{Payload, TokenStream},
 };
 
 use super::{Error, Expression, Item, Result};
@@ -53,7 +53,7 @@ pub fn parse_while(stream: &mut TokenStream) -> Result<While> {
 pub fn parse_if(stream: &mut TokenStream) -> Result<If> {
     let condition = Box::new(parse_expression(stream)?);
     let then = parse_block(stream)?;
-    let otherwise = if let Token::Else = stream.peek() {
+    let otherwise = if let Payload::Else = stream.peek() {
         stream.advance();
         Some(parse_else(stream)?)
     } else {
@@ -68,7 +68,7 @@ pub fn parse_if(stream: &mut TokenStream) -> Result<If> {
 }
 
 fn parse_else(stream: &mut TokenStream) -> Result<Else> {
-    if let Token::If = stream.peek() {
+    if let Payload::If = stream.peek() {
         stream.advance();
         Ok(Else::If(Box::new(parse_if(stream)?)))
     } else {
@@ -77,12 +77,12 @@ fn parse_else(stream: &mut TokenStream) -> Result<Else> {
 }
 
 pub fn parse_block(stream: &mut TokenStream) -> Result<Block> {
-    expect!(stream, Token::LBrace, "An opening brace");
+    expect!(stream, Payload::LBrace, "An opening brace");
     let mut block = Vec::new();
     let mut must_close = false;
     let semicolon_terminated = loop {
         match stream.peek() {
-            Token::RBrace => {
+            Payload::RBrace => {
                 stream.advance();
                 // If the last statement read a semicolon afterwards, must_close will be false.
                 break !must_close;
@@ -93,7 +93,7 @@ pub fn parse_block(stream: &mut TokenStream) -> Result<Block> {
                     panic!("Unclosed block");
                 };
                 block.push(item);
-                if let Token::Semicolon = stream.peek() {
+                if let Payload::Semicolon = stream.peek() {
                     stream.advance();
                 } else {
                     must_close = true;

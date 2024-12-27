@@ -1,6 +1,6 @@
 use crate::{
     expect,
-    lexer::{Token, TokenStream},
+    lexer::{Payload, TokenStream},
 };
 
 use super::{Error, Expression, Result};
@@ -33,14 +33,14 @@ pub fn parse_binary(stream: &mut TokenStream) -> Result<Expression> {
 
 fn parse_assignment(stream: &mut TokenStream) -> Result<Expression> {
     let left = parse_or(stream)?;
-    let Token::Eq = stream.peek() else {
+    let Payload::Eq = stream.peek() else {
         return Ok(left);
     };
     let right = parse_or(stream)?;
 
     expect!(
         stream,
-        Token::Identifier(left),
+        Payload::Identifier(left),
         "a variable as an assign target"
     );
 
@@ -52,7 +52,7 @@ fn parse_assignment(stream: &mut TokenStream) -> Result<Expression> {
 
 fn parse_or(stream: &mut TokenStream) -> Result<Expression> {
     let mut left = parse_and(stream)?;
-    while let Token::Or = stream.peek() {
+    while let Payload::Or = stream.peek() {
         stream.advance();
         let right = parse_and(stream)?;
         left = Expression::Binary(Binary {
@@ -66,7 +66,7 @@ fn parse_or(stream: &mut TokenStream) -> Result<Expression> {
 
 fn parse_and(stream: &mut TokenStream) -> Result<Expression> {
     let mut left = parse_comparison(stream)?;
-    while let Token::And = stream.peek() {
+    while let Payload::And = stream.peek() {
         stream.advance();
         let right = parse_comparison(stream)?;
         left = Expression::Binary(Binary {
@@ -82,9 +82,9 @@ fn parse_comparison(stream: &mut TokenStream) -> Result<Expression> {
     let mut left = parse_term(stream)?;
     loop {
         let op = match stream.peek() {
-            Token::Lt => BinaryOp::Lt,
-            Token::Gt => BinaryOp::Gt,
-            Token::DoubleEq => BinaryOp::Eq,
+            Payload::Lt => BinaryOp::Lt,
+            Payload::Gt => BinaryOp::Gt,
+            Payload::DoubleEq => BinaryOp::Eq,
             _ => break,
         };
         stream.advance();
@@ -102,8 +102,8 @@ fn parse_term(stream: &mut TokenStream) -> Result<Expression> {
     let mut left = parse_factor(stream)?;
     loop {
         let op = match stream.peek() {
-            Token::Plus => BinaryOp::Add,
-            Token::Minus => BinaryOp::Sub,
+            Payload::Plus => BinaryOp::Add,
+            Payload::Minus => BinaryOp::Sub,
             _ => break,
         };
         stream.advance();
@@ -121,8 +121,8 @@ fn parse_factor(stream: &mut TokenStream) -> Result<Expression> {
     let mut left = parse_unary(stream)?;
     loop {
         let op = match stream.peek() {
-            Token::Star => BinaryOp::Mul,
-            Token::Slash => BinaryOp::Div,
+            Payload::Star => BinaryOp::Mul,
+            Payload::Slash => BinaryOp::Div,
             _ => break,
         };
         stream.advance();
@@ -138,19 +138,19 @@ fn parse_factor(stream: &mut TokenStream) -> Result<Expression> {
 
 fn parse_unary(stream: &mut TokenStream) -> Result<Expression> {
     match stream.advance() {
-        Token::Integer(i) => Ok(Expression::LitInt(i)),
-        Token::Boolean(b) => Ok(Expression::LitBool(b)),
-        Token::Identifier(ident) => {
-            if let Token::LParen = stream.peek() {
+        Payload::Integer(i) => Ok(Expression::LitInt(i)),
+        Payload::Boolean(b) => Ok(Expression::LitBool(b)),
+        Payload::Identifier(ident) => {
+            if let Payload::LParen = stream.peek() {
                 stream.advance();
                 let mut args = Vec::new();
                 loop {
-                    if let Token::RParen = stream.peek() {
+                    if let Payload::RParen = stream.peek() {
                         stream.advance();
                         break;
                     }
                     args.push(parse_binary(stream)?);
-                    if let Token::Comma = stream.peek() {
+                    if let Payload::Comma = stream.peek() {
                         stream.advance();
                     }
                 }

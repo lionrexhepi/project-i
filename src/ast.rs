@@ -7,7 +7,7 @@ use flow::{parse_block, parse_if, parse_while};
 pub use flow::{Block, Else, If, While};
 use snafu::Snafu;
 
-use crate::lexer::{Token, TokenStream};
+use crate::lexer::{Payload, TokenStream};
 
 pub struct Ast {
     items: Vec<Item>,
@@ -88,7 +88,7 @@ pub fn parse(stream: &mut TokenStream) -> Result<Ast> {
     while let Some(item) = parse_item(stream)? {
         items.push(item);
 
-        let (Token::Semicolon | Token::Eof) = stream.advance() else {
+        let (Payload::Semicolon | Payload::Eof) = stream.advance() else {
             panic!("Expected semicolon to terminate statement")
         };
     }
@@ -97,27 +97,27 @@ pub fn parse(stream: &mut TokenStream) -> Result<Ast> {
 
 fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
     let item = match stream.peek() {
-        Token::Eof => return Ok(None),
-        Token::Print => {
+        Payload::Eof => return Ok(None),
+        Payload::Print => {
             stream.advance();
             let expression = parse_expression(stream)?;
             Item::Print(expression)
         }
-        Token::Let => {
+        Payload::Let => {
             stream.advance();
-            expect!(stream, Token::Identifier(name), "identifier");
+            expect!(stream, Payload::Identifier(name), "identifier");
 
             let typename = match stream.peek() {
-                Token::Colon => {
+                Payload::Colon => {
                     stream.advance();
-                    expect!(stream, Token::Identifier(ident), "identifier");
+                    expect!(stream, Payload::Identifier(ident), "identifier");
                     Some(ident)
                 }
-                Token::Eq => None,
+                Payload::Eq => None,
                 _ => panic!("unexpected token"),
             };
 
-            expect!(stream, Token::Eq, "an assignment");
+            expect!(stream, Payload::Eq, "an assignment");
 
             let value = parse_expression(stream)?;
 
@@ -135,18 +135,18 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
 
 fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
     match stream.peek() {
-        Token::Fn => {
+        Payload::Fn => {
             stream.advance();
             Ok(Expression::Function {
                 body: parse_block(stream)?,
             })
         }
-        Token::If => {
+        Payload::If => {
             stream.advance();
             let if_expr = parse_if(stream)?;
             Ok(Expression::If(if_expr))
         }
-        Token::While => {
+        Payload::While => {
             stream.advance();
             let while_expr = parse_while(stream)?;
             Ok(Expression::While(while_expr))
@@ -160,7 +160,7 @@ pub enum Error {
     #[snafu(display("unexpected token: expected {}, found {:?}", expected, found))]
     UnexpectedToken {
         expected: &'static str,
-        found: Token,
+        found: Payload,
     },
 }
 
@@ -172,7 +172,7 @@ mod test {
 
     #[test]
     fn test_print_int() {
-        let mut stream = TokenStream::from([Token::Print, Token::Integer(42)]);
+        let mut stream = TokenStream::from([Payload::Print, Payload::Integer(42)]);
         let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert!(matches!(
@@ -183,7 +183,7 @@ mod test {
 
     #[test]
     fn test_print_bool() {
-        let mut stream = TokenStream::from([Token::Print, Token::Boolean(true)]);
+        let mut stream = TokenStream::from([Payload::Print, Payload::Boolean(true)]);
         let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert!(matches!(
@@ -194,7 +194,7 @@ mod test {
 
     #[test]
     fn test_print_identifier() {
-        let mut stream = TokenStream::from([Token::Print, Token::Identifier("foo".into())]);
+        let mut stream = TokenStream::from([Payload::Print, Payload::Identifier("foo".into())]);
         let items = parse(&mut stream).unwrap();
         assert_eq!(items.items.len(), 1);
         assert_eq!(
@@ -205,7 +205,7 @@ mod test {
 
     #[test]
     fn test_let_int() {
-        use Token::*;
+        use Payload::*;
         let mut stream = TokenStream::from([
             Let,
             Identifier("foo".into()),
@@ -228,7 +228,7 @@ mod test {
 
     #[test]
     fn test_fn_expr() {
-        use Token::*;
+        use Payload::*;
         let mut stream = TokenStream::from([
             Let,
             Identifier("func".into()),

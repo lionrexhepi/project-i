@@ -6,7 +6,7 @@ use snafu::Snafu;
 use crate::{ast::Identifier, errors::SourceLocation};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Token {
+pub enum Payload {
     // Literals
     Integer(i64),
     Boolean(bool),
@@ -44,7 +44,7 @@ pub enum Token {
 
 #[derive(Debug)]
 pub struct TokenStream {
-    pub inner: VecDeque<Token>,
+    pub inner: VecDeque<Payload>,
 }
 
 impl TokenStream {
@@ -54,16 +54,16 @@ impl TokenStream {
         }
     }
 
-    fn push(&mut self, token: Token) {
+    fn push(&mut self, token: Payload) {
         self.inner.push_back(token);
     }
 
-    pub fn advance(&mut self) -> Token {
-        self.inner.pop_front().unwrap_or(Token::Eof)
+    pub fn advance(&mut self) -> Payload {
+        self.inner.pop_front().unwrap_or(Payload::Eof)
     }
 
-    pub fn peek(&self) -> &Token {
-        self.inner.front().unwrap_or(&Token::Eof)
+    pub fn peek(&self) -> &Payload {
+        self.inner.front().unwrap_or(&Payload::Eof)
     }
 }
 
@@ -107,7 +107,7 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
                         source.advance();
                     }
                     _ => {
-                        stream.push(Token::Integer(lit));
+                        stream.push(Payload::Integer(lit));
                         break;
                     }
                 }
@@ -115,29 +115,29 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
         } else {
             source.advance();
             stream.push(match c {
-                ',' => Token::Comma,
-                ';' => Token::Semicolon,
-                '(' => Token::LParen,
-                ')' => Token::RParen,
-                ':' => Token::Colon,
-                '{' => Token::LBrace,
-                '}' => Token::RBrace,
+                ',' => Payload::Comma,
+                ';' => Payload::Semicolon,
+                '(' => Payload::LParen,
+                ')' => Payload::RParen,
+                ':' => Payload::Colon,
+                '{' => Payload::LBrace,
+                '}' => Payload::RBrace,
                 '=' => {
                     if let Some('=') = source.peek_n(1) {
                         source.advance();
-                        Token::DoubleEq
+                        Payload::DoubleEq
                     } else {
-                        Token::Eq
+                        Payload::Eq
                     }
                 }
-                '+' => Token::Plus,
-                '-' => Token::Minus,
-                '*' => Token::Star,
-                '/' => Token::Slash,
-                '>' => Token::Gt,
-                '<' => Token::Lt,
-                '|' => Token::Or,
-                '&' => Token::And,
+                '+' => Payload::Plus,
+                '-' => Payload::Minus,
+                '*' => Payload::Star,
+                '/' => Payload::Slash,
+                '>' => Payload::Gt,
+                '<' => Payload::Lt,
+                '|' => Payload::Or,
+                '&' => Payload::And,
                 other => return Err(Error::UnexpectedCharacter { token: other }),
             });
         }
@@ -146,24 +146,24 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
     Ok(stream)
 }
 
-fn special_ident(ident: SmolStr) -> Token {
+fn special_ident(ident: SmolStr) -> Payload {
     match ident.as_str() {
-        "print" => Token::Print,
-        "true" => Token::Boolean(true),
-        "false" => Token::Boolean(false),
-        "let" => Token::Let,
-        "fn" => Token::Fn,
-        "while" => Token::While,
-        "if" => Token::If,
-        "else" => Token::Else,
-        _ => Token::Identifier(ident.into()),
+        "print" => Payload::Print,
+        "true" => Payload::Boolean(true),
+        "false" => Payload::Boolean(false),
+        "let" => Payload::Let,
+        "fn" => Payload::Fn,
+        "while" => Payload::While,
+        "if" => Payload::If,
+        "else" => Payload::Else,
+        _ => Payload::Identifier(ident.into()),
     }
 }
 
 #[cfg(test)]
 impl<I> From<I> for TokenStream
 where
-    I: IntoIterator<Item = Token>,
+    I: IntoIterator<Item = Payload>,
 {
     fn from(tokens: I) -> Self {
         TokenStream {
@@ -254,14 +254,14 @@ mod test {
     fn test_number() {
         let source = "print 42";
         let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
-        assert_eq!(stream.inner, vec![Token::Print, Token::Integer(42)]);
+        assert_eq!(stream.inner, vec![Payload::Print, Payload::Integer(42)]);
     }
 
     #[test]
     fn test_bool() {
         let source = "print true";
         let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
-        assert_eq!(stream.inner, vec![Token::Print, Token::Boolean(true)]);
+        assert_eq!(stream.inner, vec![Payload::Print, Payload::Boolean(true)]);
     }
 
     #[test]
@@ -270,7 +270,7 @@ mod test {
         let stream = lex(source.chars().collect::<InMemoryFile>()).unwrap();
         assert_eq!(
             stream.inner,
-            vec![Token::Print, Token::Identifier("foo".into())]
+            vec![Payload::Print, Payload::Identifier("foo".into())]
         );
     }
 
@@ -281,10 +281,10 @@ mod test {
         assert_eq!(
             stream.inner,
             vec![
-                Token::Let,
-                Token::Identifier("x".into()),
-                Token::Eq,
-                Token::Integer(42)
+                Payload::Let,
+                Payload::Identifier("x".into()),
+                Payload::Eq,
+                Payload::Integer(42)
             ]
         );
     }
