@@ -97,9 +97,15 @@ pub fn parse(stream: &mut TokenStream) -> Result<Ast> {
     while let Some(item) = parse_item(stream)? {
         items.push(item);
 
-        let (Payload::Semicolon | Payload::Eof) = stream.advance().payload else {
-            panic!("Expected semicolon to terminate statement")
-        };
+        match stream.advance().payload {
+            (Payload::Semicolon | Payload::Eof) => {}
+            other => {
+                return Err(Error::UnexpectedToken {
+                    expected: "A semicolon to terminate a statement",
+                    found: other,
+                })
+            }
+        }
     }
     Ok(Ast { items })
 }
@@ -116,14 +122,19 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
             stream.advance();
             expect!(stream, Payload::Identifier(name), "identifier");
 
-            let typename = match stream.peek().payload {
+            let typename = match &stream.peek().payload {
                 Payload::Colon => {
                     stream.advance();
                     expect!(stream, Payload::Identifier(ident), "identifier");
                     Some(ident)
                 }
                 Payload::Eq => None,
-                _ => panic!("unexpected token"),
+                other => {
+                    return Err(Error::UnexpectedToken {
+                        expected: ": or =",
+                        found: other.clone(),
+                    })
+                }
             };
 
             expect!(stream, Payload::Eq, "an assignment");

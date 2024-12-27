@@ -87,10 +87,18 @@ pub fn parse_block(stream: &mut TokenStream) -> Result<Block> {
                 // If the last statement read a semicolon afterwards, must_close will be false.
                 break !must_close;
             }
-            _ if must_close => panic!("Expected Semicolon or end of block"),
-            _ => {
+            other if must_close => {
+                return Err(Error::UnexpectedToken {
+                    expected: "}",
+                    found: other,
+                })
+            }
+            other => {
                 let Some(item) = parse_item(stream)? else {
-                    panic!("Unclosed block");
+                    return Err(Error::UnexpectedToken {
+                        expected: "A statement",
+                        found: other,
+                    });
                 };
                 block.push(item);
                 if let Payload::Semicolon = stream.peek().payload {

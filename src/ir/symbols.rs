@@ -71,7 +71,6 @@ impl SymbolTable {
 
     #[track_caller]
     pub fn push_scope(&mut self) {
-        println!("Pushing scope, {:#?}", std::panic::Location::caller());
         let child = self.scope_arena.len();
         self.scope_arena[self.current_scope].append_child(child);
         self.scope_arena.push(Scope::new(self.current_scope));
@@ -83,11 +82,6 @@ impl SymbolTable {
     pub fn pop_scope(&mut self) -> Vec<(TempId, TypeId)> {
         let scope = &self.scope_arena[self.current_scope];
         self.current_scope = scope.parent.expect("Popped global scope");
-        println!(
-            "Popping scope, {:#?}. New scope: {}",
-            std::panic::Location::caller(),
-            self.current_scope
-        );
 
         scope.temporaries().collect()
     }
