@@ -59,9 +59,10 @@ pub enum Expression {
     Identifier(Identifier),
     Call(Identifier, Vec<Expression>),
     Function {
+        name: Option<Identifier>,
         args: Vec<FnArg>,
-        body: Block,
         return_type: Option<Identifier>,
+        body: Block,
     },
     If(If),
     While(While),
@@ -169,12 +170,18 @@ fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
     match stream.peek().payload {
         Payload::Fn => {
             stream.advance();
-            dbg!(stream.peek());
+            let name = if let Payload::Identifier(_) = &stream.peek().payload {
+                let Payload::Identifier(name) = stream.advance().payload else {
+                    unreachable!()
+                };
+                Some(name)
+            } else {
+                None
+            };
             let mut args = Vec::new();
             if let Payload::LParen = stream.peek().payload {
                 stream.advance();
                 while let Payload::Identifier(_) = stream.peek().payload {
-                    dbg!(stream.peek());
                     let Payload::Identifier(name) = stream.advance().payload else {
                         unreachable!()
                     };
@@ -187,7 +194,6 @@ fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
                 }
                 expect!(stream, Payload::RParen, "a closing parenthesis");
             };
-            dbg!(stream.peek());
 
             let return_type = if let Payload::Colon = stream.peek().payload {
                 stream.advance();
@@ -198,6 +204,7 @@ fn parse_expression(stream: &mut TokenStream) -> Result<Expression> {
             };
 
             Ok(Expression::Function {
+                name,
                 body: parse_block(stream)?,
                 args,
                 return_type,

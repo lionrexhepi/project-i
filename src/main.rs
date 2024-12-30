@@ -9,22 +9,13 @@ use project_i::{
 
 fn main() {
     let source = r#"
-        let fac = fn (n: i32): i32 {
+        let facrec= fn fac(n: i32): i32 {
             if n == 2{
                 1
             } else {
                 n * fac(n - 1) 
             }
-        };
-      
-
-        let main = fn {
-        let a: i32 = if true {
-            let b = 1;
-            b + 2
-        } else { 1 };
-        print a;
-        }"#
+        };"#
     .chars()
     .collect::<InMemoryFile>();
     let mut tokens = lex(source).unwrap();

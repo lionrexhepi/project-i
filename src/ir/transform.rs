@@ -93,6 +93,7 @@ fn transform_expression(
             Ok((IrItem::Variable(name.into()), *ty))
         }
         Expression::Function {
+            name,
             body,
             args,
             return_type,
@@ -126,21 +127,29 @@ fn transform_expression(
                 })
                 .collect::<Result<Vec<_>>>()?;
 
+            let arg_types = args.iter().map(|(_, ty)| *ty).collect();
+
+            let id = symbols.function_pointer(arg_types, return_type);
+
+            if let Some(name) = name {
+                symbols.insert(&name, Symbol::Variable(id));
+            }
+
             symbols.push_scope();
 
             for (name, ty) in args.iter() {
                 symbols.insert(name, Symbol::Variable(*ty));
             }
 
-            let (body, actual_return_type) = transform_block(body, symbols, None)?;
+            let ret_temp = symbols.create_temporary();
+
+            println!("Transform body");
+            let (body, actual_return_type) = transform_block(body, symbols, Some(ret_temp))?;
+            println!("Body transformed. actual_return_type: {actual_return_type:?}");
 
             symbols.pop_scope();
 
-            assert_types!(symbols, actual_return_type, return_type);
-
-            let arg_types = args.iter().map(|(_, ty)| *ty).collect();
-
-            let id = symbols.function_pointer(arg_types, return_type);
+            assert_types!(symbols, return_type, actual_return_type);
 
             let args = args
                 .into_iter()
@@ -300,11 +309,14 @@ fn transform_block(
     save_to: Option<TempId>,
 ) -> Result<AnnotatedBlock> {
     symbols.push_scope();
+    println!("Beginning block transform");
     let len = block.statements.len();
     let mut statements = Vec::with_capacity(if save_to.is_some() { len + 1 } else { len });
     let mut ty = TypeId::VOID;
     for (i, item) in block.statements.into_iter().enumerate() {
+        println!("Beginning statement #{i}");
         let (statement, statement_ty) = transform_statement(item, symbols)?;
+        println!("Ending statement #{i}. statement_ty: {statement_ty:?}");
 
         if i == len - 1 {
             if let Some(temp) = save_to {
@@ -312,7 +324,6 @@ fn transform_block(
                     var: temp.get_name(),
                     value: Box::new(statement),
                 });
-
                 ty = statement_ty;
                 break;
             }
@@ -329,6 +340,7 @@ fn transform_block(
     if let Some(save_to) = save_to {
         symbols.set_temporary_type(save_to, ty);
     }
+    println!("Block transform finished. ty:{ty:?}");
 
     Ok((
         IrBlock {

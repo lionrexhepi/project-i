@@ -31,7 +31,7 @@ fn write_item(item: IrItem, to: &mut impl Write) {
 
             let args = args
                 .into_iter()
-                .map(|(ty, name)| format!("{} {}", ty, name))
+                .map(|(name, ty)| format!("{} {}", ty, name))
                 .collect::<Vec<_>>()
                 .join(", ");
 

@@ -168,14 +168,11 @@ fn parse_unary(stream: &mut TokenStream) -> Result<Expression> {
                 Ok(Expression::Identifier(ident))
             }
         }
-        other => {
-            dbg!(std::panic::Location::caller());
-            Err(Error::UnexpectedToken {
-                expected: "Literal or identifier",
-                found: other,
-                at: location,
-            })
-        }
+        other => Err(Error::UnexpectedToken {
+            expected: "Literal or identifier",
+            found: other,
+            at: location,
+        }),
     }
 }
 
