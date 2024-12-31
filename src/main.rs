@@ -3,7 +3,6 @@ use std::io::Write;
 
 use project_i::{
     ast::parse,
-    ir::transform,
     lexer::{lex, InMemoryFile},
 };
 
@@ -13,14 +12,14 @@ fn main() {
             if n == 2{
                 1
             } else {
-                n * fac(n - 1) 
+                n * fac(n - 1)
             }
         };"#
     .chars()
     .collect::<InMemoryFile>();
     let mut tokens = lex(source).unwrap();
     let ast = parse(&mut tokens).unwrap();
-    let ir = transform(ast).unwrap();
+    let ir = todo!();
     let mut buf = Vec::from(b"#include <stdio.h>\nint add2(int a){return a+2;}\n");
     project_i::codegen::write_c(ir, &mut buf);
     println!("{}", str::from_utf8(&buf).unwrap());

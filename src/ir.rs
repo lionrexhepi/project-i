@@ -1,9 +1,7 @@
 pub mod symbols;
-mod transform;
 pub mod transformer;
 mod types;
 use snafu::Snafu;
-pub use transform::transform;
 
 use smol_str::SmolStr;
 

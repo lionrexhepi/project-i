@@ -1,4 +1,4 @@
-use crate::ast::{Ast, BinaryOp, Expression, Item, While};
+use crate::ast::{Ast, BinaryOp, Expression, FnArg, Item, While};
 
 use super::{
     symbols::{Symbol, SymbolTable, TempId},
@@ -54,12 +54,15 @@ impl FileTransformer {
             .push(item);
     }
 
-    fn scoped(&mut self, with: impl FnOnce(&mut Self)) -> Vec<IrItem> {
+    fn scoped<T>(&mut self, with: impl FnOnce(&mut Self) -> Result<T>) -> Result<(T, Vec<IrItem>)> {
         self.symbols.push_scope();
         self.ir_stack.push(Vec::new());
-        with(self);
+        let result = with(self)?;
         self.symbols.pop_scope();
-        self.ir_stack.pop().expect("Cannot pop top IR block")
+        Ok((
+            result,
+            self.ir_stack.pop().expect("Cannot pop top IR block"),
+        ))
     }
 }
 
@@ -122,7 +125,80 @@ impl FileTransformer {
                 args,
                 return_type,
             } => {
-                todo!()
+                let return_type = return_type
+                    .map(|name| {
+                        let Symbol::Type(ty) = self
+                            .symbols
+                            .get(&name)
+                            .ok_or_else(|| Error::UndeclaredType { name: name.clone() })?
+                        else {
+                            return Err(Error::UndeclaredType { name });
+                        };
+                        Ok(*ty)
+                    })
+                    .transpose()?
+                    .unwrap_or(TypeId::VOID);
+
+                let args = args
+                    .into_iter()
+                    .map(|FnArg { name, typename }| {
+                        let Symbol::Type(ty) =
+                            self.symbols
+                                .get(&typename)
+                                .ok_or_else(|| Error::UndeclaredType {
+                                    name: typename.clone(),
+                                })?
+                        else {
+                            return Err(Error::UndeclaredType { name: typename });
+                        };
+                        Ok((name, *ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                let arg_types = args.iter().map(|(_, ty)| *ty).collect();
+
+                let id = self.symbols.function_pointer(arg_types, return_type);
+
+                if let Some(name) = name {
+                    self.symbols.insert(&name, Symbol::Variable(id));
+                }
+
+                self.symbols.push_scope();
+
+                for (name, ty) in args.iter() {
+                    self.symbols.insert(name, Symbol::Variable(*ty));
+                }
+
+                let ret_temp = self.symbols.create_temporary();
+
+                println!("Transform body");
+                let (body, actual_return_type) = self.transform_block(body, true)?;
+
+                let temporaries = self
+                    .symbols
+                    .pop_scope()
+                    .into_iter()
+                    .map(|(id, ty)| (id.get_name(), self.symbols.resolve_type(ty).c_name().into()))
+                    .collect();
+                self.assert_types(return_type, actual_return_type)?;
+
+                let args = args
+                    .into_iter()
+                    .map(|(name, ty)| (name.into(), self.symbols.resolve_type(ty).c_name().into()))
+                    .collect();
+
+                Ok((
+                    IrItem::Function {
+                        body: IrBlock {
+                            temporaries,
+                            statements: vec![IrItem::Block(body)],
+                            return_var: Some(ret_temp.get_name()),
+                        },
+                        args,
+                        return_type: self.symbols.resolve_type(return_type).c_name().into(),
+                    },
+                    id,
+                ))
                 /* */
             }
             Expression::If(r#if) => self.transform_if(r#if),
@@ -236,7 +312,7 @@ impl FileTransformer {
 
         let mut ty = TypeId::VOID;
 
-        let statements = self.scoped(|this| {
+        let (_, statements) = self.scoped(|this| {
             let len = block.statements.len();
             for (i, item) in block.into_iter().enumerate() {
                 match this.process_item(item) {
@@ -257,7 +333,8 @@ impl FileTransformer {
                     }
                 }
             }
-        });
+            Ok(())
+        })?;
 
         let return_var = temp.map(TempId::get_name);
 
