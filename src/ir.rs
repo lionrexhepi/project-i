@@ -41,9 +41,8 @@ pub enum IrItem {
         body: IrBlock,
     },
     If {
-        condition: Box<IrItem>,
-        then: IrBlock,
-        otherwise: Option<Box<IrItem>>,
+        branches: Vec<IfBranch>,
+        otherwise: Option<IrBlock>,
     },
     Loop {
         condition: Box<IrItem>,
@@ -67,10 +66,15 @@ pub enum IrItem {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct IfBranch {
+    pub condition: IrItem,
+    pub then: IrBlock,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct IrBlock {
     temporaries: Vec<(SmolStr, SmolStr)>,
     statements: Vec<IrItem>,
-    pub(crate) return_var: Option<SmolStr>,
 }
 
 impl IntoIterator for IrBlock {

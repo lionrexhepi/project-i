@@ -17,9 +17,8 @@ pub struct While {
 
 #[derive(Debug, PartialEq)]
 pub struct If {
-    pub condition: Box<Expression>,
-    pub then: Block,
-    pub otherwise: Option<Else>,
+    pub branches: Vec<(Expression, Block)>,
+    pub otherwise: Option<Block>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -51,29 +50,27 @@ pub fn parse_while(stream: &mut TokenStream) -> Result<While> {
 }
 
 pub fn parse_if(stream: &mut TokenStream) -> Result<If> {
-    let condition = Box::new(parse_expression(stream)?);
-    let then = parse_block(stream)?;
-    let otherwise = if let Payload::Else = stream.peek().payload {
+    let mut branches = Vec::new();
+    let otherwise = loop {
+        let condition = parse_expression(stream)?;
+        let body = parse_block(stream)?;
+        branches.push((condition, body));
+        let Payload::Else = stream.peek().payload else {
+            break None;
+        };
         stream.advance();
-        Some(parse_else(stream)?)
-    } else {
-        None
+
+        if let Payload::If = stream.peek().payload {
+            stream.advance();
+        } else {
+            break Some(parse_block(stream)?);
+        }
     };
 
     Ok(If {
-        condition,
-        then,
+        branches,
         otherwise,
     })
-}
-
-fn parse_else(stream: &mut TokenStream) -> Result<Else> {
-    if let Payload::If = stream.peek().payload {
-        stream.advance();
-        Ok(Else::If(Box::new(parse_if(stream)?)))
-    } else {
-        Ok(Else::Block(parse_block(stream)?))
-    }
 }
 
 pub fn parse_block(stream: &mut TokenStream) -> Result<Block> {

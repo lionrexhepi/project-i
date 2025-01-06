@@ -64,17 +64,24 @@ fn write_item(item: IrItem, to: &mut impl Write) {
             to.write_all(b"}").unwrap();
         }
         IrItem::If {
-            condition,
-            then,
+            branches,
             otherwise,
         } => {
-            to.write_all(b"if (").unwrap();
-            write_item(*condition, to);
-            to.write_all(b")").unwrap();
-            write_item(IrItem::Block(then), to);
+            let len = branches.len();
+            for (i, branch) in branches.into_iter().enumerate() {
+                to.write_all(b"if (").unwrap();
+                write_item(branch.condition, to);
+                to.write_all(b")").unwrap();
+                write_item(IrItem::Block(branch.then), to);
+
+                if i < len - 1 {
+                    to.write_all(b"else ").unwrap();
+                }
+            }
+
             if let Some(otherwise) = otherwise {
                 to.write_all(b"else").unwrap();
-                write_item(*otherwise, to);
+                write_item(IrItem::Block(otherwise), to);
             }
         }
         IrItem::Loop { condition, body } => {
