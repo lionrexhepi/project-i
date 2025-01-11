@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use smol_str::SmolStr;
-
 use crate::ast::Identifier;
 
 use super::types::{Signature, Type, TypeId, TypeMap};
@@ -54,20 +52,6 @@ impl SymbolTable {
         self.types.function_pointer(args, ret)
     }
 
-    pub fn create_temporary(&mut self) -> TempId {
-        self.scope_arena
-            .get_mut(self.current_scope)
-            .expect("Must not pop global scope")
-            .create_temporary()
-    }
-
-    pub fn set_temporary_type(&mut self, id: TempId, ty: TypeId) {
-        self.scope_arena
-            .get_mut(self.current_scope)
-            .expect("Must not pop global scope")
-            .set_temporary_type(id, ty);
-    }
-
     #[track_caller]
     pub fn push_scope(&mut self) {
         let child = self.scope_arena.len();
@@ -78,18 +62,15 @@ impl SymbolTable {
 
     /// Returns the temporaries created in the popped scope.
     #[track_caller]
-    pub fn pop_scope(&mut self) -> Vec<(TempId, TypeId)> {
+    pub fn pop_scope(&mut self) {
         let scope = &self.scope_arena[self.current_scope];
         self.current_scope = scope.parent.expect("Popped global scope");
-
-        scope.temporaries().collect()
     }
 }
 
 #[derive(Debug)]
 struct Scope {
     symbols: HashMap<Identifier, Symbol>,
-    temporaries: Vec<Temp>,
     parent: Option<ScopeIndex>,
     children: Vec<ScopeIndex>,
 }
@@ -107,7 +88,6 @@ impl Scope {
         symbols.insert("add2".into(), Symbol::Variable(add2));
         Scope {
             symbols,
-            temporaries: vec![],
             parent: None,
             children: vec![],
         }
@@ -116,7 +96,6 @@ impl Scope {
     fn new(parent: ScopeIndex) -> Self {
         Scope {
             symbols: HashMap::new(),
-            temporaries: vec![],
             parent: Some(parent),
             children: vec![],
         }
@@ -133,40 +112,9 @@ impl Scope {
     fn get(&self, name: &str) -> Option<&Symbol> {
         self.symbols.get(name)
     }
-
-    fn create_temporary(&mut self) -> TempId {
-        let id = TempId(self.temporaries.len());
-        self.temporaries.push(Temp { ty: None, id });
-        id
-    }
-
-    fn set_temporary_type(&mut self, id: TempId, ty: TypeId) {
-        self.temporaries[id.0].ty = Some(ty);
-    }
-
-    fn temporaries(&self) -> impl Iterator<Item = (TempId, TypeId)> + '_ {
-        self.temporaries
-            .iter()
-            .map(|tmp| (tmp.id, tmp.ty.expect("Temporary type not set")))
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Temp {
-    id: TempId,
-    ty: Option<TypeId>,
 }
 
 type ScopeIndex = usize;
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct TempId(usize);
-
-impl TempId {
-    pub fn get_name(self) -> SmolStr {
-        format!("t{}", self.0).into()
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Symbol {

@@ -126,7 +126,7 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
         }
         Payload::Let => {
             stream.advance();
-            println!("Parsing decl ");
+
             expect!(stream, Payload::Identifier(name), "identifier");
             let Token { payload, location } = stream.peek();
             let typename = match payload {
@@ -145,11 +145,7 @@ fn parse_item(stream: &mut TokenStream) -> Result<Option<Item>> {
                 }
             };
 
-            println!("Type: {typename:?}");
-
             expect!(stream, Payload::Eq, "an assignment");
-
-            println!("next: {:?}", stream.peek());
 
             let value = parse_expression(stream)?;
 

@@ -1,4 +1,4 @@
-use std::ops::Not;
+use smol_str::{format_smolstr, SmolStr};
 
 use crate::{
     ast::{Ast, BinaryOp, Expression, FnArg, Item, While},
@@ -6,23 +6,33 @@ use crate::{
 };
 
 use super::{
-    symbols::{Symbol, SymbolTable, TempId},
+    symbols::{Symbol, SymbolTable},
     types::{Signature, Type, TypeId},
     Error, IrBlock, IrItem, Result,
 };
 
-#[derive(Default)]
 pub struct FileTransformer {
     ir_stack: Vec<Vec<IrItem>>,
     symbols: SymbolTable,
     errors: Vec<Error>,
+    temp_count: usize,
 }
 
 impl FileTransformer {
+    pub fn new() -> Self {
+        Self {
+            ir_stack: vec![vec![]],
+            symbols: Default::default(),
+            errors: vec![],
+            temp_count: 0,
+        }
+    }
+
     pub fn transform_file(mut self, file: Ast) -> std::result::Result<Vec<IrItem>, Vec<Error>> {
         for item in file.into_iter() {
             match self.process_item(item) {
                 Ok((stmt, _)) => {
+                    println!("{stmt:?}");
                     self.push_item(stmt);
                 }
                 Err(err) => {
@@ -68,6 +78,13 @@ impl FileTransformer {
             result,
             self.ir_stack.pop().expect("Cannot pop top IR block"),
         ))
+    }
+
+    fn temp(&mut self) -> SmolStr {
+        let temp = format_smolstr!("temp{}", self.temp_count);
+
+        self.temp_count += 1;
+        temp
     }
 }
 
@@ -144,6 +161,8 @@ impl FileTransformer {
                     .transpose()?
                     .unwrap_or(TypeId::VOID);
 
+                let return_temp = self.temp();
+
                 let args = args
                     .into_iter()
                     .map(|FnArg { name, typename }| {
@@ -174,38 +193,47 @@ impl FileTransformer {
                     self.symbols.insert(name, Symbol::Variable(*ty));
                 }
 
-                let ret_temp = self.symbols.create_temporary();
-
                 println!("Transform body");
-                let TransformBlock { block, return_var } = self.transform_block(body, true)?;
+                let TransformBlock {
+                    mut block,
+                    ty: actual_return_type,
+                } = self.transform_block(body, true)?;
 
-                let (return_var, actual_return_type) = return_var.unzip();
+                self.assert_types(return_type, actual_return_type)?;
 
-                let temporaries = self
-                    .symbols
-                    .pop_scope()
-                    .into_iter()
-                    .map(|(id, ty)| (id.get_name(), self.symbols.resolve_type(ty).c_name().into()))
-                    .collect();
-                self.assert_types(return_type, actual_return_type.unwrap_or(TypeId::VOID))?;
+                block.statements.last_mut().map(|last| {
+                    let expr = last.clone();
+                    *last = IrItem::Assign {
+                        var: return_temp.clone(),
+                        value: Box::new(expr),
+                    };
+                });
 
                 let args = args
                     .into_iter()
                     .map(|(name, ty)| (name.into(), self.symbols.resolve_type(ty).c_name().into()))
                     .collect();
 
+                let return_type_name = self.symbols.resolve_type(return_type).c_name();
+
                 Ok((
                     IrItem::Function {
                         body: IrBlock {
-                            temporaries,
-                            statements: vec![IrItem::Block(block)],
+                            statements: vec![
+                                IrItem::Declaration {
+                                    typename: return_type_name.into(),
+                                    var: return_temp.clone(),
+                                    value: None,
+                                },
+                                IrItem::Block(block),
+                                IrItem::Return(Some(Box::new(IrItem::Variable(return_temp)))),
+                            ],
                         },
                         args,
-                        return_type: self.symbols.resolve_type(return_type).c_name().into(),
+                        return_type: return_type_name.into(),
                     },
                     id,
                 ))
-                /* */
             }
             Expression::If(r#if) => self.transform_if(r#if),
             Expression::While(While { condition, body }) => {
@@ -302,12 +330,12 @@ impl FileTransformer {
     }
 
     fn transform_if(&mut self, r#if: crate::ast::If) -> Result<(IrItem, TypeId)> {
-        let result_temp = if r#if.otherwise.is_some() {
-            Some(self.symbols.create_temporary())
+        let mut ty = TypeId::VOID;
+        let temp = if r#if.otherwise.is_some() {
+            Some(self.temp())
         } else {
             None
         };
-        let mut ty = TypeId::VOID;
         let branches = r#if
             .branches
             .into_iter()
@@ -318,25 +346,23 @@ impl FileTransformer {
 
                 let TransformBlock {
                     mut block,
-                    return_var,
-                } = self.transform_block(then, result_temp.is_some())?;
-
-                let (branch_var, branch_ty) = return_var.unzip();
+                    ty: branch_ty,
+                } = self.transform_block(then, true)?;
 
                 if i == 0 {
-                    ty = branch_ty.unwrap_or(TypeId::VOID);
+                    ty = branch_ty;
                 } else {
-                    self.assert_types(ty, branch_ty.unwrap_or(TypeId::VOID))?;
+                    self.assert_types(ty, branch_ty)?;
                 }
 
-                if let Some(result_temp) = &result_temp {
-                    block.statements.push(IrItem::Assign {
-                        var: result_temp.get_name(),
-                        value: Box::new(IrItem::Variable(
-                            branch_var
-                                .map(TempId::get_name)
-                                .expect("I told you to store that thing"),
-                        )),
+                if let Some(temp) = &temp {
+                    block.statements.last_mut().map(|statement| {
+                        let expr = statement.clone();
+                        *statement = IrItem::Assign {
+                            var: temp.clone(),
+                            value: Box::new(expr),
+                        };
+                        ()
                     });
                 }
 
@@ -352,16 +378,20 @@ impl FileTransformer {
             .map(|otherwise| {
                 let TransformBlock {
                     mut block,
-                    return_var,
+                    ty: otherwise_ty,
                 } = self.transform_block(otherwise, true)?;
 
-                let (id, otherwise_ty) = return_var.unwrap();
-
                 self.assert_types(ty, otherwise_ty)?;
-                block.statements.push(IrItem::Assign {
-                    var: result_temp.unwrap().get_name(),
-                    value: Box::new(IrItem::Variable(id.get_name())),
+
+                block.statements.last_mut().map(|statement| {
+                    let expr = statement.clone();
+                    *statement = IrItem::Assign {
+                        var: temp.clone().unwrap(),
+                        value: Box::new(expr),
+                    };
+                    ()
                 });
+
                 Ok(block)
             })
             .transpose()?;
@@ -371,21 +401,20 @@ impl FileTransformer {
             otherwise,
         };
 
-        if let Some(result_temp) = result_temp {
+        if let Some(result_temp) = temp {
+            self.push_item(IrItem::Declaration {
+                typename: self.symbols.resolve_type(ty).c_name().into(),
+                var: result_temp.clone(),
+                value: None,
+            });
             self.push_item(r#if);
-            Ok((IrItem::Variable(result_temp.get_name()), ty))
+            Ok((IrItem::Variable(result_temp), ty))
         } else {
             Ok((r#if, TypeId::VOID))
         }
     }
 
     fn transform_block(&mut self, block: crate::ast::Block, store: bool) -> Result<TransformBlock> {
-        let return_var = if store {
-            Some(self.symbols.create_temporary())
-        } else {
-            None
-        };
-
         let mut ty = TypeId::VOID;
 
         let (_, statements) = self.scoped(|this| {
@@ -395,11 +424,7 @@ impl FileTransformer {
                     Ok((stmt, stmt_ty)) => {
                         if store && i == len - 1 {
                             ty = stmt_ty;
-                            this.symbols.set_temporary_type(return_var.unwrap(), ty);
-                            this.push_item(IrItem::Assign {
-                                var: return_var.unwrap().get_name(),
-                                value: Box::new(stmt),
-                            });
+                            this.push_item(stmt);
                         } else {
                             this.push_item(stmt);
                         }
@@ -412,19 +437,13 @@ impl FileTransformer {
             Ok(())
         })?;
 
-        let block = IrBlock {
-            temporaries: todo!(),
-            statements,
-        };
+        let block = IrBlock { statements };
 
-        Ok(TransformBlock {
-            block,
-            return_var: return_var.map(|id| (id, ty)),
-        })
+        Ok(TransformBlock { block, ty })
     }
 }
 
 struct TransformBlock {
     block: IrBlock,
-    return_var: Option<(TempId, TypeId)>,
+    ty: TypeId,
 }

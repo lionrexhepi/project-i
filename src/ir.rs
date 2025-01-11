@@ -24,7 +24,7 @@ where
 }
 
 /// Stringly-typed intermediate representation
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum IrItem {
     Print(Box<IrItem>),
     Declaration {
@@ -63,17 +63,17 @@ pub enum IrItem {
         args: Vec<IrItem>,
     },
     Multiple(Vec<IrItem>),
+    Return(Option<Box<IrItem>>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct IfBranch {
     pub condition: IrItem,
     pub then: IrBlock,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct IrBlock {
-    temporaries: Vec<(SmolStr, SmolStr)>,
     statements: Vec<IrItem>,
 }
 
@@ -82,22 +82,11 @@ impl IntoIterator for IrBlock {
     // the full beauty of rust
     type IntoIter = std::vec::IntoIter<IrItem>;
     fn into_iter(self) -> Self::IntoIter {
-        let mut tmp_results = self
-            .temporaries
-            .into_iter()
-            .map(|(name, ty)| IrItem::Declaration {
-                typename: ty,
-                var: name,
-                value: None,
-            })
-            .collect::<Vec<_>>();
-        tmp_results.extend(self.statements);
-
-        tmp_results.into_iter()
+        self.statements.into_iter()
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
     Add,
     Sub,

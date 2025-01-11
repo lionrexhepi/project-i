@@ -5,6 +5,7 @@ use crate::ir::{Ir, IrItem, Operator};
 pub fn write_c(program: Ir, to: &mut impl Write) {
     for item in program.items {
         write_item(item, to);
+        to.write_all(b";").unwrap();
     }
 }
 
@@ -38,8 +39,9 @@ fn write_item(item: IrItem, to: &mut impl Write) {
             write!(to, "{} {}({}){{", return_type, var, args).unwrap();
             for item in body {
                 write_item(item, to);
+                to.write_all(b";").unwrap();
             }
-            to.write_all(b"return 0;}").unwrap();
+            to.write_all(b"}").unwrap();
         }
         IrItem::Declaration {
             typename: ty,
@@ -60,6 +62,8 @@ fn write_item(item: IrItem, to: &mut impl Write) {
             to.write_all(b"{").unwrap();
             for item in block {
                 write_item(item, to);
+
+                to.write_all(b";").unwrap();
             }
             to.write_all(b"}").unwrap();
         }
@@ -129,6 +133,12 @@ fn write_item(item: IrItem, to: &mut impl Write) {
         IrItem::Multiple(items) => {
             for item in items {
                 write_item(item, to);
+            }
+        }
+        IrItem::Return(item) => {
+            to.write_all(b"return ").unwrap();
+            if let Some(val) = item {
+                write_item(*val, to);
             }
         }
     }
