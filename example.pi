@@ -1,37 +1,4 @@
-let fact = fn(n: u32): u32 with
-    if n <= 1 then
-        1
-    else
-        n * fact(n - 1)
-    end
-end;
-
-fn main() {
-            if true {
-                print 43
-            } else {
-                print 24
-            }
-        }
-
-fn add(a: i32, b: i32): i32 { a + b };
-
-let addOne = add(1);
-
-let main = fn(): i32 with
-    let number1 = std::io::readline() -> i32::parse;
-    let number2 = i32::parse(std::io::readline());
-
-    std::io::print("number1 + 1: ");
-    addOne(number1) -> std::io::println;
-    std::io::print("number2 + 1: ");
-    std::io::println(addOne(number2);
-end;
-
-let par = fn() with
-    use std.concurrency;
-    let nursery = std::concurrency::nursery();
-    for i in 0..10 do
-        nursery.spawn(async() with print i end);
-    end;
-end;
+let main = fn(): i32 {
+    print 42;
+    0
+}

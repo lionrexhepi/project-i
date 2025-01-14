@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.5.26", features = ["derive"] }
 smol_str = "0.3.2"
 snafu = "0.8.5"
+tempdir = "0.3.7"
