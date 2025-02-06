@@ -1,6 +1,5 @@
-use core::str;
 use std::{
-    io::{Read, Result, Write},
+    io::{Result, Write},
     path::PathBuf,
 };
 
@@ -9,7 +8,7 @@ use project_i::{
     ast::parse,
     codegen,
     ir::transformer::FileTransformer,
-    lexer::{lex, File, InMemoryFile},
+    lexer::{files::DiskFile, lex, File},
 };
 use tempdir::TempDir;
 
@@ -32,10 +31,8 @@ fn main() -> Result<()> {
         .input
         .into_iter()
         .map(|path| -> Result<_> {
-            let mut string = String::new();
-            std::fs::File::open(path)?.read_to_string(&mut string)?;
+            let source = DiskFile::open(&path).unwrap();
 
-            let source = string.chars().collect::<InMemoryFile>();
             let name = source.name().to_owned();
             let mut tokens = lex(source).unwrap();
             let ast = parse(&mut tokens).unwrap();

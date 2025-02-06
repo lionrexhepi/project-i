@@ -1,4 +1,6 @@
-use std::collections::VecDeque;
+pub mod files;
+
+use std::{collections::VecDeque, str::Utf8Error};
 
 use smol_str::{SmolStr, SmolStrBuilder};
 use snafu::Snafu;
@@ -100,24 +102,24 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
     let mut stream = TokenStream::new();
 
     loop {
-        let Some(c) = source.peek() else {
+        let Some(c) = source.peek()? else {
             break;
         };
 
-        let location = source.location();
+        let location = source.location().clone();
 
         if c.is_ascii_whitespace() {
-            source.advance();
+            source.advance()?;
         } else if c.is_ascii_alphabetic() {
             let mut ident = SmolStrBuilder::new();
             ident.push(c);
-            source.advance();
+            source.advance()?;
             loop {
-                let c = source.peek();
+                let c = source.peek()?;
                 match c {
                     Some(letter) if letter.is_ascii_alphanumeric() => {
                         ident.push(letter);
-                        source.advance();
+                        source.advance()?;
                     }
                     _ => {
                         let ident = ident.finish();
@@ -131,14 +133,15 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
             }
             continue;
         } else if c.is_ascii_digit() {
-            let mut lit = c.to_digit(10).unwrap() as i64;
-            source.advance();
+            let mut lit = c.to_digit(10).ok_or(Error::InvalidNumberLiteral)? as i64;
+            source.advance()?;
             loop {
-                let c = source.peek();
+                let c = source.peek()?;
                 match c {
                     Some(digit) if digit.is_ascii_digit() => {
-                        lit = lit * 10 + digit.to_digit(10).unwrap() as i64;
-                        source.advance();
+                        lit = lit * 10
+                            + digit.to_digit(10).ok_or(Error::InvalidNumberLiteral)? as i64;
+                        source.advance()?;
                     }
                     _ => {
                         stream.push(Token {
@@ -150,7 +153,7 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
                 }
             }
         } else {
-            source.advance();
+            source.advance()?;
             let payload = match c {
                 ',' => Payload::Comma,
                 ';' => Payload::Semicolon,
@@ -160,8 +163,8 @@ pub fn lex(mut source: impl File) -> Result<TokenStream> {
                 '{' => Payload::LBrace,
                 '}' => Payload::RBrace,
                 '=' => {
-                    if let Some('=') = source.peek() {
-                        source.advance();
+                    if let Some('=') = source.peek()? {
+                        source.advance()?;
                         Payload::DoubleEq
                     } else {
                         Payload::Eq
@@ -200,66 +203,18 @@ fn special_ident(ident: SmolStr) -> Payload {
 
 pub trait File {
     /// File name for error reporting.
-    fn name(&self) -> &str;
-
-    fn advance(&mut self) -> Option<char>;
-    fn peek(&self) -> Option<char>;
-    fn peek_n(&self, n: usize) -> Option<char>;
-
-    fn location(&self) -> SourceLocation;
-}
-
-pub struct InMemoryFile {
-    name: String,
-    data: VecDeque<char>,
-    line: usize,
-    column: usize,
-}
-
-impl File for InMemoryFile {
     fn name(&self) -> &str {
-        &self.name
+        &self.location().file
     }
 
-    fn advance(&mut self) -> Option<char> {
-        let c = self.data.remove(0);
-        match c {
-            Some('\n') => {
-                self.line += 1;
-                self.column = 0;
-            }
-            Some(_) => self.column += 1,
-            None => {}
-        }
-        c
-    }
+    #[must_use = "May fail on I/O"]
+    fn advance(&mut self) -> ReadCharResult;
+    #[must_use = "May fail on I/O"]
+    fn peek(&self) -> ReadCharResult;
+    #[must_use = "May fail on I/O"]
+    fn peek_n(&self, n: usize) -> ReadCharResult;
 
-    fn peek(&self) -> Option<char> {
-        self.data.front().copied()
-    }
-
-    fn peek_n(&self, n: usize) -> Option<char> {
-        self.data.get(n).copied()
-    }
-
-    fn location(&self) -> SourceLocation {
-        SourceLocation {
-            line: self.line,
-            column: self.column,
-            file: self.name().into(),
-        }
-    }
-}
-
-impl FromIterator<char> for InMemoryFile {
-    fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> Self {
-        InMemoryFile {
-            name: "<string literal>".into(),
-            data: iter.into_iter().collect(),
-            line: 0,
-            column: 0,
-        }
-    }
+    fn location(&self) -> &SourceLocation;
 }
 
 #[derive(Snafu, Debug)]
@@ -268,6 +223,16 @@ pub enum Error {
     UnexpectedCharacter { token: char },
     #[snafu(display("Invalid number literal. Only base 10 ASCII digits are supported."))]
     InvalidNumberLiteral,
+    #[snafu(display("IO Error while dealing with file {}", file.clone().unwrap_or_else(String::new)))]
+    Io {
+        file: Option<String>,
+        source: std::io::Error,
+    },
+    #[snafu(display("Invalid Unicode byte sequence: {:x}", seq))]
+    InvalidUtf8 { source: Utf8Error, seq: u32 },
+    #[snafu(display("Unexpected end of file within Unicode byte sequence"))]
+    UnexpectedEof { source: Utf8Error },
 }
 
 type Result<T> = std::result::Result<T, Error>;
+type ReadCharResult = Result<Option<char>>;

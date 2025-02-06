@@ -20,6 +20,25 @@ pub struct SourceLocation {
     pub column: usize,
 }
 
+impl SourceLocation {
+    pub fn new(file: impl ToString) -> Self {
+        Self {
+            file: file.to_string().into(),
+            line: 1,
+            column: 1,
+        }
+    }
+
+    pub fn advance_col(&mut self) {
+        self.column += 1;
+    }
+
+    pub fn advance_line(&mut self) {
+        self.column = 1;
+        self.line += 1;
+    }
+}
+
 pub trait CodeError {
     fn wrap(self, location: SourceLocation) -> Error;
 }

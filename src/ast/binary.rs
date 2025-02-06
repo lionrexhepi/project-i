@@ -180,7 +180,7 @@ fn parse_unary(stream: &mut TokenStream) -> Result<Expression> {
 mod test {
 
     use super::*;
-    use crate::lexer::{lex, InMemoryFile};
+    use crate::lexer::{files::Literal as InMemoryFile, lex};
 
     #[test]
     fn test_parse_binary() {
